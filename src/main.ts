@@ -1,8 +1,17 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { AtGuard } from './authentication/common/guards';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.enableCors({
+    origin: process.env.CORS_ORIGIN,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
+  app.setGlobalPrefix('api');
+  const reflector = new Reflector();
+  app.useGlobalGuards(new AtGuard(reflector));
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap().catch((err) => {

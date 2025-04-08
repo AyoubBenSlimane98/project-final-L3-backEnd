@@ -2,6 +2,9 @@
 CREATE TYPE "EtatPresence" AS ENUM ('PRESENT', 'ABSENT');
 
 -- CreateEnum
+CREATE TYPE "SexeUtilisateur" AS ENUM ('Male', 'Female');
+
+-- CreateEnum
 CREATE TYPE "QuestionEtat" AS ENUM ('repondre', 'attrandre', 'bloquer');
 
 -- CreateTable
@@ -43,9 +46,10 @@ CREATE TABLE "Utilisateur" (
     "id" SERIAL NOT NULL,
     "nom" TEXT NOT NULL,
     "prenom" TEXT NOT NULL,
-    "image" TEXT NOT NULL,
+    "image" TEXT,
     "dateNaissance" TIMESTAMP(3) NOT NULL,
-    "bio" TEXT NOT NULL,
+    "bio" TEXT,
+    "sexe" "SexeUtilisateur" NOT NULL,
     "compteId" INTEGER NOT NULL,
 
     CONSTRAINT "Utilisateur_pkey" PRIMARY KEY ("id")

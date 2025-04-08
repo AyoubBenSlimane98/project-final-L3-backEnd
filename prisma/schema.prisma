@@ -12,6 +12,11 @@ enum EtatPresence {
   ABSENT
 }
 
+enum SexeUtilisateur {
+  Male
+  Female
+}
+
 model Token {
   id           Int      @id @default(autoincrement())
   accessToken  String   @unique
@@ -46,9 +51,10 @@ model Utilisateur {
   id            Int             @id @default(autoincrement())
   nom           String
   prenom        String
-  image         String
+  image         String?
   dateNaissance DateTime
-  bio           String
+  bio           String?
+  sexe          SexeUtilisateur
   compteId      Int             @unique
   compte        Compte          @relation(fields: [compteId], references: [id])
   etudiant      Etudiant?
@@ -139,8 +145,7 @@ model Enseignant {
   sujets      Sujet[]
   groupes     Groupe[]
   Question    Question[]
-
-  Réunion Réunion[]
+  Réunion    Réunion[]
 }
 
 model EnseignantResponsable {
@@ -297,26 +302,26 @@ model Question {
 }
 
 model Réunion {
-  id        Int      @id @default(autoincrement())
-  titre     String
-  remarque  String
-  lien      String
-  dateDebut DateTime
-  dateFin   DateTime
-  groupeId  Int
-  groupe    Groupe   @relation(fields: [groupeId], references: [id])
-  enseignantId Int
-  enseignant   Enseignant @relation(fields: [enseignantId], references: [id])
+  id            Int             @id @default(autoincrement())
+  titre         String
+  remarque      String
+  lien          String
+  dateDebut     DateTime
+  dateFin       DateTime
+  groupeId      Int
+  groupe        Groupe          @relation(fields: [groupeId], references: [id])
+  enseignantId  Int
+  enseignant    Enseignant      @relation(fields: [enseignantId], references: [id])
   Participation Participation[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 }
 
 model Participation {
-  id         Int      @id @default(autoincrement())
+  id         Int          @id @default(autoincrement())
   etat       EtatPresence
   etudiantId Int
-  etudiant   Etudiant @relation(fields: [etudiantId], references: [id])
+  etudiant   Etudiant     @relation(fields: [etudiantId], references: [id])
   reunionId  Int
-  reunion    Réunion @relation(fields: [reunionId], references: [id])
+  reunion    Réunion     @relation(fields: [reunionId], references: [id])
 }
