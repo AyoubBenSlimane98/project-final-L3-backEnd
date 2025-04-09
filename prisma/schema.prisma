@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
@@ -15,6 +16,12 @@ enum EtatPresence {
 enum SexeUtilisateur {
   Male
   Female
+}
+
+enum Role {
+  ETUDIANT
+  ENSEIGNANT
+  ADMIN
 }
 
 model Token {
@@ -60,6 +67,7 @@ model Utilisateur {
   etudiant      Etudiant?
   enseignant    Enseignant?
   admin         Administrateur?
+  
 }
 
 model DatePresence {

@@ -12,7 +12,7 @@ export class CodeOtpService {
       where: { email },
     });
     if (!compte) {
-      return otp;
+      throw new ForbiddenException('Email not Found!');
     }
     await this.prisma.codeOTP.upsert({
       where: {

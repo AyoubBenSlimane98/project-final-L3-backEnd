@@ -4,7 +4,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { AuthSigninDto, AuthSignupDto } from './dto';
+import { AuthPasswod, AuthSigninDto, AuthSignupDto } from './dto';
 import * as bcrypt from 'bcrypt';
 import { generateOTP } from 'src/util';
 import { JwtService } from '@nestjs/jwt';
@@ -99,6 +99,20 @@ export class AuthenticationService {
     const { email, password } = authSigninDto;
     const existentCompte = await this.prisma.compte.findUnique({
       where: { email },
+      include: {
+        user: {
+          include: {
+            etudiant: true,
+            enseignant: {
+              include: {
+                principal: true,
+                responsable: true,
+              },
+            },
+            admin: true,
+          },
+        },
+      },
     });
     if (!existentCompte) {
       throw new ForbiddenException('Email or Password is not courrect');
@@ -126,9 +140,82 @@ export class AuthenticationService {
         compteId: existentCompte.id,
       },
     });
+    const utilisateur = existentCompte.user;
     return {
       message: 'Login successful',
       token: tokens,
+      role: utilisateur?.etudiant
+        ? 'etudiant'
+        : utilisateur?.enseignant?.responsable
+          ? 'enseignant_responsable'
+          : utilisateur?.enseignant?.principal
+            ? 'enseignant_principal'
+            : utilisateur?.admin
+              ? 'admin'
+              : 'unknown',
+    };
+  }
+  async changePassword(authPasswod: AuthPasswod) {
+    const { email, password } = authPasswod;
+    const existentCompte = await this.prisma.compte.findUnique({
+      where: { email },
+    });
+    if (!existentCompte) {
+      throw new ForbiddenException('Email or Password is not courrect');
+    }
+    const hash = await this.hashPassword(password);
+    const tokens = await this.getTokens(
+      existentCompte.id,
+      existentCompte.email,
+    );
+    await this.prisma.token.upsert({
+      where: { compteId: existentCompte.id },
+      update: {
+        accessToken: tokens.accessToken,
+        refreshtoken: await this.hashPassword(tokens.refreshtoken),
+      },
+      create: {
+        accessToken: tokens.accessToken,
+        refreshtoken: await this.hashPassword(tokens.refreshtoken),
+        compteId: existentCompte.id,
+      },
+    });
+    await this.prisma.compte.update({
+      where: { id: existentCompte.id },
+      data: {
+        password: hash,
+      },
+    });
+    const compte = await this.prisma.compte.findUnique({
+      where: { email },
+      include: {
+        user: {
+          include: {
+            etudiant: true,
+            enseignant: {
+              include: {
+                principal: true,
+                responsable: true,
+              },
+            },
+            admin: true,
+          },
+        },
+      },
+    });
+    const utilisateur = compte?.user;
+    return {
+      message: 'Login successful',
+      token: tokens,
+      role: utilisateur?.etudiant
+        ? 'etudiant'
+        : utilisateur?.enseignant?.responsable
+          ? 'enseignant_responsable'
+          : utilisateur?.enseignant?.principal
+            ? 'enseignant_principal'
+            : utilisateur?.admin
+              ? 'admin'
+              : 'unknown',
     };
   }
 

@@ -1,15 +1,18 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   HttpCode,
   HttpStatus,
+  InternalServerErrorException,
   ParseIntPipe,
   Post,
+  Put,
   UseGuards,
 } from '@nestjs/common';
 import { CodeOtpService } from 'src/code-otp/code-otp.service';
 import { EmailService } from 'src/email/email.service';
-import { AuthSigninDto, AuthSignupDto } from './dto';
+import { AuthPasswod, AuthSigninDto, AuthSignupDto } from './dto';
 import { AuthenticationService } from './authentication.service';
 import { RtGuard } from './common/guards';
 import { CurrentUserId, Public, User } from './common/decorators';
@@ -26,13 +29,23 @@ export class AuthenticationController {
   @Post('send-otp')
   @HttpCode(HttpStatus.CREATED)
   async sendToEmail(@Body('email') email: string) {
-    const otp = await this.codeOtpService.storeOTP(email);
-    const { message } = await this.emailService.sendOTPEmail(email, otp);
+    try {
+      const otp = await this.codeOtpService.storeOTP(email);
+      const { message } = await this.emailService.sendOTPEmail(email, otp);
 
-    if (message !== 'Email sent successfully') {
-      throw new Error('Failed to send OTP email');
+      if (message !== 'Email sent successfully') {
+        throw new InternalServerErrorException('Failed to send OTP email');
+      }
+      return { message: `OTP sent to ${email} successfully!` };
+    } catch (error) {
+      console.log(error);
+      if (error instanceof ForbiddenException) {
+        throw new ForbiddenException(error.message);
+      }
+      throw new InternalServerErrorException(
+        'Something went wrong while sending OTP',
+      );
     }
-    return { message: `OTP sent to ${email} successfully!` };
   }
   @Public()
   @Post('verify-otp')
@@ -51,6 +64,12 @@ export class AuthenticationController {
   @HttpCode(HttpStatus.OK)
   async signIn(@Body() authSigninDto: AuthSigninDto) {
     return await this.authenticationService.signIn(authSigninDto);
+  }
+  @Public()
+  @Put('change-password')
+  @HttpCode(HttpStatus.OK)
+  async changePassword(@Body() authPasswod: AuthPasswod) {
+    return await this.authenticationService.changePassword(authPasswod);
   }
 
   @Post('logout')
