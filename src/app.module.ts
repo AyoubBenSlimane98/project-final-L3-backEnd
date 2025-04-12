@@ -8,6 +8,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { AdminModule } from './admin/admin.module';
 import { FileUploadModule } from './file-upload/file-upload.module';
 import { PrincipalModule } from './principal/principal.module';
+import { ResponsableModule } from './responsable/responsable.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { PrincipalModule } from './principal/principal.module';
     AdminModule,
     FileUploadModule,
     PrincipalModule,
+    ResponsableModule,
   ],
   providers: [],
 })

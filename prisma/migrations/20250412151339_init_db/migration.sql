@@ -78,7 +78,6 @@ CREATE TABLE "Etudiant" (
     "id" SERIAL NOT NULL,
     "matricule" TEXT NOT NULL,
     "userId" INTEGER NOT NULL,
-    "binomeId" INTEGER NOT NULL,
 
     CONSTRAINT "Etudiant_pkey" PRIMARY KEY ("id")
 );
@@ -86,7 +85,9 @@ CREATE TABLE "Etudiant" (
 -- CreateTable
 CREATE TABLE "Binome" (
     "id" SERIAL NOT NULL,
-    "responsabilite" TEXT NOT NULL,
+    "responsabilite" TEXT,
+    "etudiant1Id" INTEGER NOT NULL,
+    "etudiant2Id" INTEGER,
     "groupeId" INTEGER NOT NULL,
 
     CONSTRAINT "Binome_pkey" PRIMARY KEY ("id")
@@ -105,7 +106,7 @@ CREATE TABLE "Note" (
 -- CreateTable
 CREATE TABLE "Groupe" (
     "id" SERIAL NOT NULL,
-    "enseignantId" INTEGER NOT NULL,
+    "enseignantId" INTEGER,
 
     CONSTRAINT "Groupe_pkey" PRIMARY KEY ("id")
 );
@@ -352,6 +353,12 @@ CREATE UNIQUE INDEX "Etudiant_matricule_key" ON "Etudiant"("matricule");
 CREATE UNIQUE INDEX "Etudiant_userId_key" ON "Etudiant"("userId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Binome_etudiant1Id_key" ON "Binome"("etudiant1Id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Binome_etudiant2Id_key" ON "Binome"("etudiant2Id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "EtudiantResponsableEtape_etudiantId_key" ON "EtudiantResponsableEtape"("etudiantId");
 
 -- CreateIndex
@@ -406,7 +413,10 @@ ALTER TABLE "Presence" ADD CONSTRAINT "Presence_dateId_fkey" FOREIGN KEY ("dateI
 ALTER TABLE "Etudiant" ADD CONSTRAINT "Etudiant_userId_fkey" FOREIGN KEY ("userId") REFERENCES "Utilisateur"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Etudiant" ADD CONSTRAINT "Etudiant_binomeId_fkey" FOREIGN KEY ("binomeId") REFERENCES "Binome"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Binome" ADD CONSTRAINT "Binome_etudiant1Id_fkey" FOREIGN KEY ("etudiant1Id") REFERENCES "Etudiant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Binome" ADD CONSTRAINT "Binome_etudiant2Id_fkey" FOREIGN KEY ("etudiant2Id") REFERENCES "Etudiant"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Binome" ADD CONSTRAINT "Binome_groupeId_fkey" FOREIGN KEY ("groupeId") REFERENCES "Groupe"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -418,7 +428,7 @@ ALTER TABLE "Note" ADD CONSTRAINT "Note_binomeId_fkey" FOREIGN KEY ("binomeId") 
 ALTER TABLE "Note" ADD CONSTRAINT "Note_etapeId_fkey" FOREIGN KEY ("etapeId") REFERENCES "Etape"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Groupe" ADD CONSTRAINT "Groupe_enseignantId_fkey" FOREIGN KEY ("enseignantId") REFERENCES "Enseignant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Groupe" ADD CONSTRAINT "Groupe_enseignantId_fkey" FOREIGN KEY ("enseignantId") REFERENCES "Enseignant"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "EtudiantResponsableEtape" ADD CONSTRAINT "EtudiantResponsableEtape_etudiantId_fkey" FOREIGN KEY ("etudiantId") REFERENCES "Etudiant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

@@ -1,7 +1,15 @@
-import { Body, Controller, Get, ParseIntPipe, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Put,
+} from '@nestjs/common';
 import { PrincipalService } from './principal.service';
-import { CompteID } from 'src/authentication/common/decorators';
-import { PrincipalInfoProfil, PrincipalPasswordDto } from './dto';
+import { CompteID, Public } from 'src/authentication/common/decorators';
+import { PrincipalInfoProfil, PrincipalPasswordDto, UserDto } from './dto';
 
 @Controller('principal')
 export class PrincipalController {
@@ -10,6 +18,17 @@ export class PrincipalController {
   async getPrincipal(@CompteID('sub', ParseIntPipe) sub: number) {
     return await this.principalService.getPrincipal(sub);
   }
+  @Public()
+  @Get('groupe')
+  async getNumberGroupes() {
+    return await this.principalService.getNumberGroupes();
+  }
+  @Public()
+  @Get('groupe/:id')
+  async getGroupe(@Param('id', ParseIntPipe) id: number) {
+    return await this.principalService.getGroupe(id);
+  }
+
   @Put('profil/img')
   async updateImageProfile(
     @CompteID('sub', ParseIntPipe) sub: number,
@@ -35,6 +54,16 @@ export class PrincipalController {
     return await this.principalService.updatepasswordProfile(
       sub,
       principalPasswordDto,
+    );
+  }
+  @Post('create-groupe/:id')
+  async createAllUserOfProject(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() userDto: UserDto,
+  ) {
+    return await this.principalService.createAllUserOfProject(
+      id,
+      userDto.users,
     );
   }
 }

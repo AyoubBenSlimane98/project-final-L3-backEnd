@@ -18,7 +18,6 @@ enum SexeUtilisateur {
   Female
 }
 
-
 model Token {
   id           Int      @id @default(autoincrement())
   accessToken  String   @unique
@@ -79,10 +78,6 @@ model Presence {
   date       DatePresence @relation(fields: [dateId], references: [id])
 }
 
-// i  can't use the relation  one to (one or Two) but i will use the one to many relation
-// besause when cretae the logic for Binome i limit the number of etudient to <= 2
-// so i will use the one to many relation here
-
 model Etudiant {
   id                 Int                         @id @default(autoincrement())
   matricule          String                      @unique
@@ -90,20 +85,24 @@ model Etudiant {
   user               Utilisateur                 @relation(fields: [userId], references: [id])
   responsableEtape   EtudiantResponsableEtape?
   responsableMemoire EtudiantResponsableMemoire?
-  binomeId           Int
-  binome             Binome                      @relation(fields: [binomeId], references: [id])
-  presences          Presence[]
-  Question           Question[]
+
+  presences Presence[]
+  Question  Question[]
 
   Participation Participation[]
+  Binome1       Binome?         @relation("Etudiant1Binome")
+  Binome2       Binome?         @relation("Etudiant2Binome")
 }
 
 model Binome {
-  id             Int        @id @default(autoincrement())
-  responsabilite String
-  etudiants      Etudiant[]
+  id             Int       @id @default(autoincrement())
+  responsabilite String?
+  etudiant1Id    Int       @unique
+  etudiant1      Etudiant  @relation("Etudiant1Binome", fields: [etudiant1Id], references: [id])
+  etudiant2Id    Int?      @unique
+  etudiant2      Etudiant? @relation("Etudiant2Binome", fields: [etudiant2Id], references: [id])
   groupeId       Int
-  groupe         Groupe     @relation(fields: [groupeId], references: [id])
+  groupe         Groupe    @relation(fields: [groupeId], references: [id])
   rapport        Rapport[]
   note           Note[]
   cas            Cas[]
@@ -119,10 +118,10 @@ model Note {
 }
 
 model Groupe {
-  id           Int        @id @default(autoincrement())
+  id           Int         @id @default(autoincrement())
   binomes      Binome[]
-  enseignantId Int
-  enseignant   Enseignant @relation(fields: [enseignantId], references: [id])
+  enseignantId Int?
+  enseignant   Enseignant? @relation(fields: [enseignantId], references: [id])
   reunions     Réunion[]
 }
 
