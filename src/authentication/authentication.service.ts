@@ -30,8 +30,7 @@ export class AuthenticationService {
     }
 
     const catNom = nom.slice(0, 3);
-    const defaultImageUrl =
-      'https://scontent.fczl2-2.fna.fbcdn.net/v/t1.30497-1/453178253_471506465671661_2781666950760530985_n.png?stp=dst-png_s480x480&_nc_cat=1&ccb=1-7&_nc_sid=136b72&_nc_eui2=AeF_OWSBlL4_ahZGK8uktg7YWt9TLzuBU1Ba31MvO4FTUAcNr-rcAk0Q6wgee_n1MVfJVXKEYXEpVc_A8npzsuDs&_nc_ohc=pCF_EXqQ5MYQ7kNvwGqbQH8&_nc_oc=AdmOQDv_qA9yPoDAQK2j4m8cM77HYt2osPaGYZiWQNIR41-_Kkg1lN_m_n79WacUl90&_nc_zt=24&_nc_ht=scontent.fczl2-2.fna&oh=00_AfEfE4VyUFM1gD2VkajBmRMamhtVSp2NpcihUNDqLsAtzg&oe=681B903A';
+
     const defaultBio = `@${prenom}_${catNom}_${otp.slice(0, 3)}`;
 
     const result = await this.prisma.$transaction(async (tx) => {
@@ -54,7 +53,6 @@ export class AuthenticationService {
           nom,
           prenom,
           sexe,
-          image: defaultImageUrl,
           bio: defaultBio,
           dateNaissance,
           compteId: newCompte.id,
@@ -115,7 +113,7 @@ export class AuthenticationService {
       },
     });
     if (!existentCompte) {
-      throw new ForbiddenException('Email or Password is not courrect');
+      throw new ForbiddenException(' xxx Email or Password is not courrect');
     }
     const isPasswordCorrect = await this.comparePasswords(
       password,

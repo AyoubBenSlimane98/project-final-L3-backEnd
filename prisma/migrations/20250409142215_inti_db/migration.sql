@@ -164,7 +164,8 @@ CREATE TABLE "Annonce" (
     "titre" TEXT NOT NULL,
     "description" TEXT NOT NULL,
     "image" TEXT,
-    "date" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updadedAt" TIMESTAMP(3) NOT NULL,
     "adminId" INTEGER NOT NULL,
 
     CONSTRAINT "Annonce_pkey" PRIMARY KEY ("id")

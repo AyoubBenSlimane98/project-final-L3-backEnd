@@ -15,7 +15,7 @@ import { EmailService } from 'src/email/email.service';
 import { AuthPasswod, AuthSigninDto, AuthSignupDto } from './dto';
 import { AuthenticationService } from './authentication.service';
 import { RtGuard } from './common/guards';
-import { CurrentUserId, Public, User } from './common/decorators';
+import { CompteID, Public, User } from './common/decorators';
 
 @Controller('authentication')
 export class AuthenticationController {
@@ -74,7 +74,7 @@ export class AuthenticationController {
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@CurrentUserId('sub', ParseIntPipe) sub: number) {
+  async logout(@CompteID('sub', ParseIntPipe) sub: number) {
     return await this.authenticationService.logout(sub);
   }
 
