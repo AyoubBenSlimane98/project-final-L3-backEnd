@@ -6,7 +6,7 @@ export const CompteID = createParamDecorator(
       .switchToHttp()
       .getRequest<{ user: Record<string, any> }>();
     if (data) {
-      return request.user?.[data] as string | undefined;
+      return request.user?.[data] as string;
     }
     return request.user;
   },

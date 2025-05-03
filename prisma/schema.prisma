@@ -18,6 +18,19 @@ enum SexeUtilisateur {
   Female
 }
 
+enum QuestionEtat {
+  repondre
+  attandre
+  bloquer
+}
+
+enum Responsabilite {
+  chapter_1
+  chapter_2
+  chapter_3
+  introduction_resume_conclustion
+}
+
 model Token {
   id           Int      @id @default(autoincrement())
   accessToken  String   @unique
@@ -25,7 +38,7 @@ model Token {
   createdAt    DateTime @default(now())
   updateAt     DateTime @updatedAt
   compteId     Int      @unique
-  compte       Compte   @relation(fields: [compteId], references: [id])
+  compte       Compte   @relation(fields: [compteId], references: [idC])
 }
 
 model CodeOTP {
@@ -34,207 +47,190 @@ model CodeOTP {
   createdAt DateTime @default(now())
   expiresAt DateTime
   compteId  Int      @unique
-  compte    Compte   @relation(fields: [compteId], references: [id])
+  compte    Compte   @relation(fields: [compteId], references: [idC])
 }
 
 model Compte {
-  id        Int          @id @default(autoincrement())
-  email     String       @unique
-  password  String
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-  user      Utilisateur?
-  codeOTP   CodeOTP?
-  token     Token?
+  idC      Int          @id @default(autoincrement())
+  email    String       @unique
+  password String
+  user     Utilisateur?
+  codeOTP  CodeOTP?
+  token    Token?
 }
 
 model Utilisateur {
-  id            Int             @id @default(autoincrement())
+  idU           Int             @id @default(autoincrement())
   nom           String
   prenom        String
   image         String?
   dateNaissance DateTime
   bio           String?
   sexe          SexeUtilisateur
-  compteId      Int             @unique
-  compte        Compte          @relation(fields: [compteId], references: [id])
+  idC           Int             @unique
+  compte        Compte          @relation(fields: [idC], references: [idC], onDelete: Cascade)
   etudiant      Etudiant?
   enseignant    Enseignant?
   admin         Administrateur?
 }
 
+model Presence {
+  etudiantId   Int
+  etudiant     Etudiant     @relation(fields: [etudiantId], references: [idU])
+  idDP         Int
+  datePresence DatePresence @relation(fields: [idDP], references: [idDP])
+  etat         EtatPresence
+
+  @@id([etudiantId, idDP])
+}
+
 model DatePresence {
-  id        Int        @id @default(autoincrement())
+  idDP      Int        @id @default(autoincrement())
   date      DateTime
   presences Presence[]
 }
 
-model Presence {
-  id         Int          @id @default(autoincrement())
-  etat       EtatPresence
-  etudiantId Int
-  etudiant   Etudiant     @relation(fields: [etudiantId], references: [id])
-  dateId     Int
-  date       DatePresence @relation(fields: [dateId], references: [id])
-}
-
 model Etudiant {
-  id                 Int                         @id @default(autoincrement())
-  matricule          String                      @unique
-  userId             Int                         @unique
-  user               Utilisateur                 @relation(fields: [userId], references: [id])
-  responsableEtape   EtudiantResponsableEtape?
-  responsableMemoire EtudiantResponsableMemoire?
-
-  presences Presence[]
-  Question  Question[]
-
+  idU           Int             @id
+  user          Utilisateur     @relation(fields: [idU], references: [idU], onDelete: Cascade)
+  matricule     String          @unique
+  noteFinal     Float?
+  presences     Presence[]
+  Question      Question[]
   Participation Participation[]
-  Binome1       Binome?         @relation("Etudiant1Binome")
-  Binome2       Binome?         @relation("Etudiant2Binome")
+  idB           Int?
+  binome        Binome?         @relation(fields: [idB], references: [idB], onDelete: Cascade)
 }
 
 model Binome {
-  id             Int       @id @default(autoincrement())
-  responsabilite String?
-  etudiant1Id    Int       @unique
-  etudiant1      Etudiant  @relation("Etudiant1Binome", fields: [etudiant1Id], references: [id])
-  etudiant2Id    Int?      @unique
-  etudiant2      Etudiant? @relation("Etudiant2Binome", fields: [etudiant2Id], references: [id])
-  groupeId       Int
-  groupe         Groupe    @relation(fields: [groupeId], references: [id])
+  idB            Int             @id @default(autoincrement())
+  responsabilite Responsabilite?
+  idG            Int
+  groupe         Groupe          @relation(fields: [idG], references: [idG], onDelete: Cascade)
+  etudiant       Etudiant[]
   rapport        Rapport[]
   note           Note[]
   cas            Cas[]
-}
-
-model Note {
-  id       Int    @id @default(autoincrement())
-  note     Float
-  Binome   Binome @relation(fields: [binomeId], references: [id])
-  binomeId Int
-  etapeId  Int
-  etape    Etape  @relation(fields: [etapeId], references: [id])
+  FeedBack       FeedBack[]
 }
 
 model Groupe {
-  id           Int         @id @default(autoincrement())
-  binomes      Binome[]
-  enseignantId Int?
-  enseignant   Enseignant? @relation(fields: [enseignantId], references: [id])
-  reunions     Réunion[]
+  idG                   Int                    @id @default(autoincrement())
+  nom                   String
+  binomes               Binome[]
+  idS                   Int?                   @unique
+  sujet                 Sujet?                 @relation(fields: [idS], references: [idS])
+  enseignantRId         Int?
+  enseignantResponsable EnseignantResponsable? @relation(fields: [enseignantRId], references: [idU], onDelete: Cascade)
+  reunions              Réunion[]
 }
 
-model EtudiantResponsableEtape {
-  id         Int      @id @default(autoincrement())
-  etudiantId Int      @unique
-  etudiant   Etudiant @relation(fields: [etudiantId], references: [id])
-}
+model Note {
+  note    Float
+  idEtape Int
+  etape   Etape  @relation(fields: [idEtape], references: [idEtape], onDelete: Cascade)
+  idB     Int
+  binome  Binome @relation(fields: [idB], references: [idB], onDelete: Cascade)
 
-model EtudiantResponsableMemoire {
-  id         Int      @id @default(autoincrement())
-  etudiantId Int      @unique
-  etudiant   Etudiant @relation(fields: [etudiantId], references: [id])
+  @@id([idEtape, idB])
 }
 
 model Enseignant {
-  id          Int                    @id @default(autoincrement())
-  userId      Int                    @unique
-  user        Utilisateur            @relation(fields: [userId], references: [id])
+  idU         Int                    @id
+  user        Utilisateur            @relation(fields: [idU], references: [idU], onDelete: Cascade)
   responsable EnseignantResponsable?
   principal   EnseignantPrincipal?
-  sujets      Sujet[]
-  groupes     Groupe[]
-  Question    Question[]
-  Réunion    Réunion[]
 }
 
 model EnseignantResponsable {
-  id           Int        @id @default(autoincrement())
-  enseignantId Int        @unique
-  enseignant   Enseignant @relation(fields: [enseignantId], references: [id])
+  idU        Int        @id
+  enseignant Enseignant @relation(fields: [idU], references: [idU], onDelete: Cascade)
+  question   Question[]
+  Groupe     Groupe[]
+  Sujet      Sujet[]
+  Réunion   Réunion[]
 }
 
 model EnseignantPrincipal {
-  id           Int        @id @default(autoincrement())
-  enseignantId Int        @unique
-  enseignant   Enseignant @relation(fields: [enseignantId], references: [id])
+  idU        Int        @id
+  enseignant Enseignant @relation(fields: [idU], references: [idU], onDelete: Cascade)
 }
 
 model Administrateur {
-  id       Int         @id @default(autoincrement())
-  userId   Int         @unique
-  user     Utilisateur @relation(fields: [userId], references: [id])
+  idU      Int         @id
+  user     Utilisateur @relation(fields: [idU], references: [idU], onDelete: Cascade)
   annonces Annonce[]
 }
 
 model Annonce {
-  id          Int            @id @default(autoincrement())
+  idA         Int             @id @default(autoincrement())
   titre       String
   description String
   image       String?
-  createdAt   DateTime       @default(now())
-  updadedAt   DateTime       @updatedAt
-  adminId     Int
-  admin       Administrateur @relation(fields: [adminId], references: [id])
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  idU         Int?
+  admin       Administrateur? @relation(fields: [idU], references: [idU], onDelete: Cascade)
 }
 
 model Sujet {
-  id           Int               @id @default(autoincrement())
-  titre        String
-  description  String
-  enseignantId Int
-  enseignant   Enseignant        @relation(fields: [enseignantId], references: [id])
-  reference    referencesSujet[]
-  prerequis    prerequisSujet[]
-  cas          Cas[]
-  etapes       Etape[]
-  rapport      Rapport?
+  idS                   Int                    @id @default(autoincrement())
+  titre                 String
+  description           String
+  enseignantRId         Int?
+  enseignantResponsable EnseignantResponsable? @relation(fields: [enseignantRId], references: [idU], onDelete: Cascade)
+  reference             referencesSujet[]
+  prerequis             prerequisSujet[]
+  cas                   Cas[]
+  etapes                Etape[]
+  rapport               Rapport?
+  Groupe                Groupe?
 }
 
 model referencesSujet {
-  id        Int    @id @default(autoincrement())
+  idRef     Int    @id @default(autoincrement())
   reference String
-  sujetId   Int
-  sujet     Sujet  @relation(fields: [sujetId], references: [id])
+  idS       Int
+  sujet     Sujet  @relation(fields: [idS], references: [idS], onDelete: Cascade)
 }
 
 model prerequisSujet {
-  id        Int    @id @default(autoincrement())
+  idPre     Int    @id @default(autoincrement())
   prerequis String
-  sujetId   Int
-  sujet     Sujet  @relation(fields: [sujetId], references: [id])
+  idS       Int
+  sujet     Sujet  @relation(fields: [idS], references: [idS], onDelete: Cascade)
 }
 
 model Cas {
-  id       Int    @id @default(autoincrement())
-  titre    String
-  détails String
-  sujetId  Int
-  sujet    Sujet  @relation(fields: [sujetId], references: [id])
-  binomeId Int
-  binome   Binome @relation(fields: [binomeId], references: [id])
+  idCas  Int     @id @default(autoincrement())
+  acteur String
+  cas    String
+  statut Boolean @default(false)
+  idS    Int
+  sujet  Sujet   @relation(fields: [idS], references: [idS], onDelete: Cascade)
+  idB    Int?
+  binome Binome? @relation(fields: [idB], references: [idB], onDelete: Cascade)
 }
 
 model VersionRapport {
-  id          Int      @id @default(autoincrement())
+  idVR        Int      @id @default(autoincrement())
   description String
   lien        String
-  rapportId   Int
-  rapport     Rapport  @relation(fields: [rapportId], references: [id])
+  idR         Int
+  rapport     Rapport  @relation(fields: [idR], references: [idR], onDelete: Cascade)
   updatedAt   DateTime @updatedAt
 }
 
 model EvaluationRaport {
-  id          Int      @id @default(autoincrement())
+  idER        Int      @id @default(autoincrement())
   description String
-  rapportId   Int
-  rapport     Rapport  @relation(fields: [rapportId], references: [id])
   updatedAt   DateTime @updatedAt
+  idR         Int
+  rapport     Rapport  @relation(fields: [idR], references: [idR], onDelete: Cascade)
 }
 
 model Rapport {
-  id                Int                @id @default(autoincrement())
+  idR               Int                @id @default(autoincrement())
   titre             String
   rapportFinal      RapportFinal?
   rapportEtape      RapportEtape?
@@ -242,88 +238,89 @@ model Rapport {
   versionRapport    VersionRapport[]
   evaluationRapport EvaluationRaport[]
   createdAt         DateTime           @default(now())
-  sujetId           Int                @unique
-  sujet             Sujet              @relation(fields: [sujetId], references: [id])
-  binomeId          Int
-  binome            Binome             @relation(fields: [binomeId], references: [id])
+  idS               Int                @unique
+  sujet             Sujet              @relation(fields: [idS], references: [idS])
+  idB               Int
+  binome            Binome             @relation(fields: [idB], references: [idB], onDelete: Cascade)
+  FeedBack          FeedBack[]
 }
 
 model RapportFinal {
-  id        Int     @id @default(autoincrement())
-  rapportId Int     @unique
-  rapport   Rapport @relation(fields: [rapportId], references: [id])
+  idR     Int     @id
+  rapport Rapport @relation(fields: [idR], references: [idR])
 }
 
 model RapportEtape {
-  id        Int     @id @default(autoincrement())
-  rapportId Int     @unique
-  rapport   Rapport @relation(fields: [rapportId], references: [id])
-  etapes    Etape?
-}
-
-model Etape {
-  id             Int          @id @default(autoincrement())
-  dateDebut      DateTime
-  dateFin        DateTime
-  rapportEtapeId Int          @unique
-  rapportEtape   RapportEtape @relation(fields: [rapportEtapeId], references: [id])
-  sujetId        Int
-  sujet          Sujet        @relation(fields: [sujetId], references: [id], onDelete: Cascade)
-  note           Note[]
+  idR     Int     @id
+  rapport Rapport @relation(fields: [idR], references: [idR])
+  etapes  Etape?
 }
 
 model RapportTâches {
-  id        Int      @id @default(autoincrement())
-  rapportId Int      @unique
-  rapport   Rapport  @relation(fields: [rapportId], references: [id])
-  tâches   Tâches?
+  idR     Int      @id
+  rapport Rapport  @relation(fields: [idR], references: [idR])
+  tâches Tâches?
+}
+
+model Etape {
+  idEtape        Int          @id @default(autoincrement())
+  dateDebut      DateTime
+  dateFin        DateTime
+  rapportEtapeId Int          @unique
+  rapportEtape   RapportEtape @relation(fields: [rapportEtapeId], references: [idR])
+  idS            Int
+  sujet          Sujet        @relation(fields: [idS], references: [idS], onDelete: Cascade)
+  note           Note[]
 }
 
 model Tâches {
-  id               Int            @id @default(autoincrement())
-  description      String
-  rapportTâchesId Int            @unique
-  rapportTâches   RapportTâches @relation(fields: [rapportTâchesId], references: [id])
-}
-
-enum QuestionEtat {
-  repondre
-  attrandre
-  bloquer
+  idTache        Int            @id @default(autoincrement())
+  description    String
+  dateDebut      DateTime
+  dateFin        DateTime
+  idR            Int            @unique
+  rapportTâches RapportTâches @relation(fields: [idR], references: [idR])
 }
 
 model Question {
-  id           Int          @id @default(autoincrement())
-  question     String
-  reponse      String
-  etat         QuestionEtat
-  etudiantId   Int
-  etudiant     Etudiant     @relation(fields: [etudiantId], references: [id])
-  enseignantId Int
-  enseignant   Enseignant   @relation(fields: [enseignantId], references: [id])
+  idQ                   Int                   @id @default(autoincrement())
+  question              String
+  reponse               String?
+  etat                  QuestionEtat          @default(attandre)
+  etudiantId            Int
+  etudiant              Etudiant              @relation(fields: [etudiantId], references: [idU], onDelete: Cascade)
+  enseignantRId         Int
+  enseignantResponsable EnseignantResponsable @relation(fields: [enseignantRId], references: [idU])
 }
 
 model Réunion {
-  id            Int             @id @default(autoincrement())
-  titre         String
-  remarque      String
-  lien          String
-  dateDebut     DateTime
-  dateFin       DateTime
-  groupeId      Int
-  groupe        Groupe          @relation(fields: [groupeId], references: [id])
-  enseignantId  Int
-  enseignant    Enseignant      @relation(fields: [enseignantId], references: [id])
-  Participation Participation[]
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  idRN                  Int                    @id @default(autoincrement())
+  titre                 String
+  remarque              String
+  lien                  String
+  dateDebut             DateTime
+  idG                   Int
+  groupe                Groupe                 @relation(fields: [idG], references: [idG])
+  enseignantRId         Int
+  enseignantResponsable EnseignantResponsable? @relation(fields: [enseignantRId], references: [idU], onDelete: Cascade)
+  Participation         Participation[]
 }
 
 model Participation {
-  id         Int          @id @default(autoincrement())
-  etat       EtatPresence
   etudiantId Int
-  etudiant   Etudiant     @relation(fields: [etudiantId], references: [id])
-  reunionId  Int
-  reunion    Réunion     @relation(fields: [reunionId], references: [id])
+  etudiant   Etudiant     @relation(fields: [etudiantId], references: [idU], onDelete: Cascade)
+  idRN       Int
+  reunion    Réunion     @relation(fields: [idRN], references: [idRN], onDelete: Cascade)
+  etat       EtatPresence
+
+  @@id([etudiantId, idRN])
+}
+
+model FeedBack {
+  idF         Int     @id @default(autoincrement())
+  description String
+  idB         Int
+  binome      Binome  @relation(fields: [idB], references: [idB])
+  idR         Int
+  rapport     Rapport @relation(fields: [idR], references: [idR])
 }

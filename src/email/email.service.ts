@@ -24,7 +24,7 @@ export class EmailService {
       from: `Programmer Ayyoub  <${fromEmail}`,
       subject: 'Your OTP Code',
       text: `Your OTP code is ${otp}`,
-      html: `<strong>Your OTP code is ${otp}</strong> is a one-time password that you can use to verify your identity. and it is valid for 10 minutes. Please do not share this code with anyone.`,
+      html: `<strong>Your OTP code is ${otp}</strong> , it is valid for 10 minutes. Please do not share this code with anyone.`,
     };
 
     try {

@@ -5,15 +5,16 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { AuthPasswod, AuthSigninDto, AuthSignupDto } from './dto';
-import * as bcrypt from 'bcrypt';
 import { generateOTP } from 'src/util';
-import { JwtService } from '@nestjs/jwt';
+import { TokenService } from 'src/token/token.service';
+import { EncryptionService } from 'src/encryption/encryption.service';
 
 @Injectable()
 export class AuthenticationService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly jwtService: JwtService,
+    private readonly tokenService: TokenService,
+    private readonly encryptionService: EncryptionService,
   ) {}
 
   async signUp(authSignupDto: AuthSignupDto) {
@@ -37,15 +38,20 @@ export class AuthenticationService {
       const newCompte = await tx.compte.create({
         data: {
           email,
-          password: await this.hashPassword(password),
+          password: await this.encryptionService.hashPassword(password),
         },
       });
-      const tokens = await this.getTokens(newCompte.id, newCompte.email);
+      const tokens = await this.tokenService.getTokens(
+        newCompte.idC,
+        newCompte.email,
+      );
       await tx.token.create({
         data: {
           accessToken: tokens.accessToken,
-          refreshtoken: await this.hashPassword(tokens.refreshtoken),
-          compteId: newCompte.id,
+          refreshtoken: await this.encryptionService.hashPassword(
+            tokens.refreshtoken,
+          ),
+          compteId: newCompte.idC,
         },
       });
       const newUser = await tx.utilisateur.create({
@@ -55,20 +61,20 @@ export class AuthenticationService {
           sexe,
           bio: defaultBio,
           dateNaissance,
-          compteId: newCompte.id,
+          idC: newCompte.idC,
         },
       });
 
       const newEnseignant = await tx.enseignant.create({
         data: {
-          userId: newUser.id,
+          idU: newUser.idU,
         },
       });
 
       if (role === 'Responsable') {
         await tx.enseignantResponsable.create({
           data: {
-            enseignantId: newEnseignant.id,
+            idU: newEnseignant.idU,
           },
         });
 
@@ -81,7 +87,7 @@ export class AuthenticationService {
       if (role === 'Principale') {
         await tx.enseignantPrincipal.create({
           data: {
-            enseignantId: newEnseignant.id,
+            idU: newEnseignant.idU,
           },
         });
 
@@ -90,9 +96,27 @@ export class AuthenticationService {
           token: tokens,
         };
       }
+      if (role === 'Both') {
+        await tx.enseignantPrincipal.create({
+          data: {
+            idU: newEnseignant.idU,
+          },
+        });
+        await tx.enseignantResponsable.create({
+          data: {
+            idU: newEnseignant.idU,
+          },
+        });
+
+        return {
+          message: 'Both created successfully',
+          token: tokens,
+        };
+      }
     });
     return result;
   }
+
   async signIn(authSigninDto: AuthSigninDto) {
     const { email, password } = authSigninDto;
     const existentCompte = await this.prisma.compte.findUnique({
@@ -113,46 +137,55 @@ export class AuthenticationService {
       },
     });
     if (!existentCompte) {
-      throw new ForbiddenException(' xxx Email or Password is not courrect');
+      throw new ForbiddenException('Email or Password is not courrect');
     }
-    const isPasswordCorrect = await this.comparePasswords(
+    const isPasswordCorrect = await this.encryptionService.comparePasswords(
       password,
       existentCompte.password,
     );
     if (!isPasswordCorrect) {
       throw new ForbiddenException('Email or Password not courrect');
     }
-    const tokens = await this.getTokens(
-      existentCompte.id,
+    const tokens = await this.tokenService.getTokens(
+      existentCompte.idC,
       existentCompte.email,
     );
     await this.prisma.token.upsert({
-      where: { compteId: existentCompte.id },
+      where: { compteId: existentCompte.idC },
       update: {
         accessToken: tokens.accessToken,
-        refreshtoken: await this.hashPassword(tokens.refreshtoken),
+        refreshtoken: await this.encryptionService.hashPassword(
+          tokens.refreshtoken,
+        ),
       },
       create: {
         accessToken: tokens.accessToken,
-        refreshtoken: await this.hashPassword(tokens.refreshtoken),
-        compteId: existentCompte.id,
+        refreshtoken: await this.encryptionService.hashPassword(
+          tokens.refreshtoken,
+        ),
+        compteId: existentCompte.idC,
       },
     });
     const utilisateur = existentCompte.user;
+    let role = 'unknown';
+
+    if (utilisateur?.etudiant) {
+      role = 'etudiant';
+    } else if (utilisateur?.enseignant?.principal) {
+      role = 'enseignant_principal';
+    } else if (utilisateur?.enseignant?.responsable) {
+      role = 'enseignant_responsable';
+    } else if (utilisateur?.admin) {
+      role = 'admin';
+    }
+
     return {
       message: 'Login successful',
       token: tokens,
-      role: utilisateur?.etudiant
-        ? 'etudiant'
-        : utilisateur?.enseignant?.responsable
-          ? 'enseignant_responsable'
-          : utilisateur?.enseignant?.principal
-            ? 'enseignant_principal'
-            : utilisateur?.admin
-              ? 'admin'
-              : 'unknown',
+      role,
     };
   }
+
   async changePassword(authPasswod: AuthPasswod) {
     const { email, password } = authPasswod;
     const existentCompte = await this.prisma.compte.findUnique({
@@ -161,25 +194,29 @@ export class AuthenticationService {
     if (!existentCompte) {
       throw new ForbiddenException('Email or Password is not courrect');
     }
-    const hash = await this.hashPassword(password);
-    const tokens = await this.getTokens(
-      existentCompte.id,
+    const hash = await this.encryptionService.hashPassword(password);
+    const tokens = await this.tokenService.getTokens(
+      existentCompte.idC,
       existentCompte.email,
     );
     await this.prisma.token.upsert({
-      where: { compteId: existentCompte.id },
+      where: { compteId: existentCompte.idC },
       update: {
         accessToken: tokens.accessToken,
-        refreshtoken: await this.hashPassword(tokens.refreshtoken),
+        refreshtoken: await this.encryptionService.hashPassword(
+          tokens.refreshtoken,
+        ),
       },
       create: {
         accessToken: tokens.accessToken,
-        refreshtoken: await this.hashPassword(tokens.refreshtoken),
-        compteId: existentCompte.id,
+        refreshtoken: await this.encryptionService.hashPassword(
+          tokens.refreshtoken,
+        ),
+        compteId: existentCompte.idC,
       },
     });
     await this.prisma.compte.update({
-      where: { id: existentCompte.id },
+      where: { idC: existentCompte.idC },
       data: {
         password: hash,
       },
@@ -202,99 +239,69 @@ export class AuthenticationService {
       },
     });
     const utilisateur = compte?.user;
+    let role = 'unknown';
+
+    if (utilisateur?.etudiant) {
+      role = 'etudiant';
+    } else if (utilisateur?.enseignant?.principal) {
+      role = 'enseignant_principal';
+    } else if (utilisateur?.enseignant?.responsable) {
+      role = 'enseignant_responsable';
+    } else if (utilisateur?.admin) {
+      role = 'admin';
+    }
+
     return {
       message: 'Login successful',
       token: tokens,
-      role: utilisateur?.etudiant
-        ? 'etudiant'
-        : utilisateur?.enseignant?.responsable
-          ? 'enseignant_responsable'
-          : utilisateur?.enseignant?.principal
-            ? 'enseignant_principal'
-            : utilisateur?.admin
-              ? 'admin'
-              : 'unknown',
+      role,
     };
   }
 
   async logout(sub: number) {
     const existentCompte = await this.prisma.compte.findUnique({
-      where: { id: sub },
+      where: { idC: sub },
     });
     if (!existentCompte) {
       throw new ForbiddenException('Compte not found');
     }
     await this.prisma.token.delete({
       where: {
-        compteId: existentCompte.id,
+        compteId: existentCompte.idC,
       },
     });
     return { message: 'Logout successful' };
   }
   async refreshToken(sub: number, refreshtoken: string) {
     const compte = await this.prisma.compte.findUnique({
-      where: { id: sub },
+      where: { idC: sub },
     });
     if (!compte) {
       throw new ForbiddenException('Compte not found');
     }
     const rt = await this.prisma.token.findUnique({
-      where: { compteId: compte.id },
+      where: { compteId: compte.idC },
     });
     if (!rt) {
       throw new ForbiddenException('Refresh token not found');
     }
-    const isRefreshTokenValid = await this.comparePasswords(
+    const isRefreshTokenValid = await this.encryptionService.comparePasswords(
       refreshtoken,
       rt.refreshtoken,
     );
     if (!isRefreshTokenValid) {
       throw new ForbiddenException('Refresh token not valid');
     }
-    const tokens = await this.getTokens(compte.id, compte.email);
+    const tokens = await this.tokenService.getTokens(compte.idC, compte.email);
     await this.prisma.token.update({
-      where: { compteId: compte.id },
+      where: { compteId: compte.idC },
       data: {
         accessToken: tokens.accessToken,
-        refreshtoken: await this.hashPassword(tokens.refreshtoken),
+        refreshtoken: await this.encryptionService.hashPassword(
+          tokens.refreshtoken,
+        ),
       },
     });
     return { message: 'Refresh token successful', tokens };
   }
-
-  async getTokens(userId: number, email: string) {
-    const [at, rt] = await Promise.all([
-      this.jwtService.signAsync(
-        { sub: userId, email },
-        {
-          expiresIn: '15m',
-          secret: process.env.JWT_AT_SECRET,
-        },
-      ),
-      this.jwtService.signAsync(
-        { sub: userId, email },
-        {
-          expiresIn: '30d',
-          secret: process.env.JWT_RT_SECRET,
-        },
-      ),
-    ]);
-
-    return {
-      accessToken: at,
-      refreshtoken: rt,
-    };
-  }
-  hashPassword = async (plainPassword: string): Promise<string> => {
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(plainPassword, saltRounds);
-    return hashedPassword;
-  };
-  comparePasswords = async (
-    plainPassword: string,
-    hashedPassword: string,
-  ): Promise<boolean> => {
-    const isMatch = await bcrypt.compare(plainPassword, hashedPassword);
-    return isMatch;
-  };
 }

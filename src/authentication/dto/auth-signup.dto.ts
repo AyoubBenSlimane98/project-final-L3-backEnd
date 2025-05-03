@@ -5,5 +5,5 @@ export class AuthSignupDto {
   prenom: string;
   dateNaissance: Date;
   sexe: 'Male' | 'Female';
-  role: 'Responsable' | 'Principale';
+  role: 'Responsable' | 'Principale' | 'Both';
 }

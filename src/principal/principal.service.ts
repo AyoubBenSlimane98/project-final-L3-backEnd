@@ -1,42 +1,45 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { PrincipalInfoProfil, PrincipalPasswordDto, UserDto } from './dto';
-
-import * as bcrypt from 'bcrypt';
+import {
+  GroupeToSujetDto,
+  PrincipalInfoProfil,
+  PrincipalPasswordDto,
+  UpdateBinomeGroupDto,
+  UserDto,
+} from './dto';
+import { EncryptionService } from 'src/encryption/encryption.service';
+import { TokenService } from 'src/token/token.service';
+import { AuthSigninDto } from 'src/authentication/dto';
+import { generateOTP } from 'src/util';
 
 @Injectable()
 export class PrincipalService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tokenService: TokenService,
+    private readonly encryptionService: EncryptionService,
+  ) {}
+
   async getNumberGroupes() {
     const counts = await this.prisma.groupe.count();
     return {
       numberGroupe: counts,
     };
   }
+
   async getGroupe(id: number) {
-    const existGroupe = await this.prisma.groupe.findUnique({ where: { id } });
+    const existGroupe = await this.prisma.groupe.findUnique({
+      where: { idG: id },
+    });
     if (!existGroupe) throw new ForbiddenException('not exsit groupe new');
     return await this.prisma.binome.findMany({
-      where: { groupeId: existGroupe.id },
+      where: { idG: existGroupe.idG },
       select: {
-        etudiant1: {
-          select: {
-            matricule: true,
-            user: {
-              select: {
-                nom: true,
-                prenom: true,
-                sexe: true,
-                compte: {
-                  select: {
-                    email: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-        etudiant2: {
+        etudiant: {
           select: {
             matricule: true,
             user: {
@@ -56,16 +59,17 @@ export class PrincipalService {
       },
     });
   }
+
   async getPrincipal(sub: number) {
     const existentPrincipal = await this.prisma.compte.findUnique({
       relationLoadStrategy: 'join',
-      where: { id: sub },
+      where: { idC: sub },
       select: {
         email: true,
         user: {
           omit: {
-            id: true,
-            compteId: true,
+            idU: true,
+            idC: true,
           },
         },
       },
@@ -75,15 +79,16 @@ export class PrincipalService {
     }
     return existentPrincipal;
   }
+
   async updateImageProfile(sub: number, image: string) {
     const existUser = await this.prisma.utilisateur.findUnique({
-      where: { compteId: sub },
+      where: { idC: sub },
     });
     if (!existUser)
       throw new ForbiddenException('not user with this information ');
     await this.prisma.utilisateur.update({
       where: {
-        id: existUser.id,
+        idU: existUser.idU,
       },
       data: {
         image,
@@ -93,18 +98,19 @@ export class PrincipalService {
       message: 'image profil change',
     };
   }
+
   async updateInfoProfile(
     sub: number,
     principalInfoProfil: PrincipalInfoProfil,
   ) {
     const existUser = await this.prisma.utilisateur.findUnique({
-      where: { compteId: sub },
+      where: { idC: sub },
     });
     if (!existUser)
       throw new ForbiddenException('not user with this information ');
     await this.prisma.utilisateur.update({
       where: {
-        id: existUser.id,
+        idU: existUser.idU,
       },
       data: {
         ...principalInfoProfil,
@@ -114,28 +120,29 @@ export class PrincipalService {
       message: 'info profil change',
     };
   }
+
   async updatepasswordProfile(
     sub: number,
     principalPasswordDto: PrincipalPasswordDto,
   ) {
     const { newPassword, oldPassword } = principalPasswordDto;
     const existCompte = await this.prisma.compte.findUnique({
-      where: { id: sub },
+      where: { idC: sub },
     });
     if (!existCompte)
       throw new ForbiddenException('not user with this information ');
 
-    const isMatches = await this.comparePasswords(
+    const isMatches = await this.encryptionService.comparePasswords(
       oldPassword,
       existCompte.password,
     );
     if (!isMatches) {
       throw new ForbiddenException('pld password not correct ');
     }
-    const hash = await this.hashPassword(newPassword);
+    const hash = await this.encryptionService.hashPassword(newPassword);
     await this.prisma.compte.update({
       where: {
-        id: sub,
+        idC: sub,
       },
       data: {
         password: hash,
@@ -155,10 +162,12 @@ export class PrincipalService {
       const binomesPerGroup = Math.ceil(totalBinomes / numberOfGroups);
 
       const createdGroupes = await Promise.all(
-        Array.from({ length: numberOfGroups }).map(() =>
+        Array.from({ length: numberOfGroups }).map((_, index) =>
           tx.groupe.create({
             data: {
-              enseignantId: null,
+              nom: `groupe ${index + 1}`,
+              enseignantRId: null,
+              idS: null,
             },
           }),
         ),
@@ -168,37 +177,51 @@ export class PrincipalService {
       let binomeCountInCurrentGroup = 0;
 
       for (const user of users) {
-        const compte1 = await tx.compte.create({
+        const groupeId = createdGroupes[currentGroupIndex].idG;
+
+        const binome = await tx.binome.create({
           data: {
-            email: user.Etudaint1.email,
-            password: await this.hashPassword(user.Etudaint1.matricul),
+            idG: groupeId,
           },
         });
 
+        const compte1 = await tx.compte.create({
+          data: {
+            email: user.Etudaint1.email,
+            password: await this.encryptionService.hashPassword(
+              user.Etudaint1.matricul,
+            ),
+          },
+        });
+        const otp = generateOTP();
+        const defaultBio1 = `@${user.Etudaint1.prenom}_${user.Etudaint1.nom}_${otp.slice(0, 3)}`;
         const utilisateur1 = await tx.utilisateur.create({
           data: {
             nom: user.Etudaint1.nom,
             prenom: user.Etudaint1.prenom,
             dateNaissance: user.Etudaint1.dateNaissance,
             sexe: user.Etudaint1.sexe,
-            compteId: compte1.id,
+            bio: defaultBio1,
+            idC: compte1.idC,
           },
         });
 
-        const etu1 = await tx.etudiant.create({
+        await tx.etudiant.create({
           data: {
             matricule: user.Etudaint1.matricul,
-            userId: utilisateur1.id,
+            idU: utilisateur1.idU,
+            idB: binome.idB,
           },
         });
 
-        let etu2Id: number | null = null;
-
         if (user.Etudaint2) {
+          const defaultBio2 = `@${user.Etudaint2.prenom}_${user.Etudaint2.nom}_${otp.slice(0, 3)}`;
           const compte2 = await tx.compte.create({
             data: {
               email: user.Etudaint2.email,
-              password: await this.hashPassword(user.Etudaint2.matricul),
+              password: await this.encryptionService.hashPassword(
+                user.Etudaint2.matricul,
+              ),
             },
           });
 
@@ -208,29 +231,19 @@ export class PrincipalService {
               prenom: user.Etudaint2.prenom,
               dateNaissance: user.Etudaint2.dateNaissance,
               sexe: user.Etudaint2.sexe,
-              compteId: compte2.id,
+              bio: defaultBio2,
+              idC: compte2.idC,
             },
           });
 
-          const etu2 = await tx.etudiant.create({
+          await tx.etudiant.create({
             data: {
               matricule: user.Etudaint2.matricul,
-              userId: utilisateur2.id,
+              idU: utilisateur2.idU,
+              idB: binome.idB,
             },
           });
-
-          etu2Id = etu2.id;
         }
-
-        const groupeId = createdGroupes[currentGroupIndex].id;
-
-        await tx.binome.create({
-          data: {
-            etudiant1Id: etu1.id,
-            etudiant2Id: etu2Id ?? undefined,
-            groupeId,
-          },
-        });
 
         binomeCountInCurrentGroup++;
 
@@ -245,21 +258,372 @@ export class PrincipalService {
 
       return {
         message: 'Groupes and binômes created successfully',
-        groupes: createdGroupes.map((g) => ({ id: g.id })),
+        groupes: createdGroupes.map((g) => ({ id: g.idG })),
       };
     });
   }
 
-  hashPassword = async (plainPassword: string): Promise<string> => {
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(plainPassword, saltRounds);
-    return hashedPassword;
-  };
-  comparePasswords = async (
-    plainPassword: string,
-    hashedPassword: string,
-  ): Promise<boolean> => {
-    const isMatch = await bcrypt.compare(plainPassword, hashedPassword);
-    return isMatch;
-  };
+  async setGroupeAndSujet(groupeToSujetDto: GroupeToSujetDto) {
+    const { groupeId, sujetId, enseignantId } = groupeToSujetDto;
+    const groupe = await this.prisma.groupe.findUnique({
+      where: { idG: groupeId },
+    });
+
+    if (!groupe) {
+      throw new ForbiddenException('Groupe not found');
+    }
+
+    if (groupe.idS || groupe.enseignantRId) {
+      throw new ForbiddenException(
+        'This group already has a subject or a responsable',
+      );
+    }
+
+    await this.prisma.groupe.update({
+      where: {
+        idG: groupeId,
+      },
+      data: {
+        idS: sujetId,
+        enseignantRId: enseignantId,
+      },
+    });
+
+    return {
+      message: 'Successfully assigned subject and responsable',
+    };
+  }
+
+  async getAllGroupes() {
+    const groupes = await this.prisma.groupe.findMany({
+      select: {
+        idG: true,
+        nom: true,
+      },
+    });
+    if (!groupes) throw new NotFoundException('can not found any groupes');
+    return groupes;
+  }
+
+  async canSwitchAccount(sub: number) {
+    const existentCompte = await this.prisma.compte.findUnique({
+      where: { idC: sub },
+      include: {
+        user: {
+          include: {
+            enseignant: {
+              include: {
+                responsable: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!existentCompte) {
+      throw new ForbiddenException('Email or Password is not correct');
+    }
+    const utilisateur = existentCompte.user;
+    if (!utilisateur?.enseignant?.responsable) {
+      return {
+        access: false,
+      };
+    }
+    return {
+      access: true,
+    };
+  }
+
+  async switchAccount(authSigninDto: AuthSigninDto) {
+    const { email, password } = authSigninDto;
+
+    const existentCompte = await this.prisma.compte.findUnique({
+      where: { email },
+      include: {
+        user: {
+          include: {
+            enseignant: {
+              include: {
+                responsable: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!existentCompte) {
+      throw new ForbiddenException('Email or Password is not correct');
+    }
+
+    const isPasswordCorrect = await this.encryptionService.comparePasswords(
+      password,
+      existentCompte.password,
+    );
+
+    if (!isPasswordCorrect) {
+      throw new ForbiddenException('Email or Password is not correct');
+    }
+
+    const utilisateur = existentCompte.user;
+
+    if (!utilisateur?.enseignant?.responsable) {
+      throw new ForbiddenException(
+        'Access Denied: Only responsable accounts can login',
+      );
+    }
+
+    const tokens = await this.tokenService.getTokens(
+      existentCompte.idC,
+      existentCompte.email,
+    );
+
+    await this.prisma.token.upsert({
+      where: { compteId: existentCompte.idC },
+      update: {
+        accessToken: tokens.accessToken,
+        refreshtoken: await this.encryptionService.hashPassword(
+          tokens.refreshtoken,
+        ),
+      },
+      create: {
+        accessToken: tokens.accessToken,
+        refreshtoken: await this.encryptionService.hashPassword(
+          tokens.refreshtoken,
+        ),
+        compteId: existentCompte.idC,
+      },
+    });
+
+    return {
+      message: 'Login successful',
+      token: tokens,
+      role: 'enseignant_responsable',
+    };
+  }
+
+  async getAllSujectAffecter() {
+    const affctation = await this.prisma.groupe.findMany({
+      where: {
+        enseignantRId: { not: null },
+        idS: { not: null },
+      },
+      select: {
+        nom: true,
+        enseignantResponsable: true,
+        sujet: true,
+      },
+    });
+
+    if (!affctation) {
+      throw new ForbiddenException('Cannot find themes for groups');
+    }
+
+    return Promise.all(
+      affctation.map(async (item) => {
+        const user = await this.prisma.utilisateur.findUnique({
+          where: { idU: item.enseignantResponsable?.idU },
+          select: {
+            nom: true,
+            prenom: true,
+          },
+        });
+
+        const sujet = await this.prisma.sujet.findUnique({
+          where: {
+            idS: item.sujet?.idS,
+          },
+          select: {
+            titre: true,
+          },
+        });
+
+        return {
+          groupe: item.nom,
+          fullName: user ? `${user.nom} ${user.prenom}` : 'Unknown Teacher',
+          sujet: sujet?.titre ?? 'Unknown Subject',
+        };
+      }),
+    );
+  }
+
+  async newGetAllBinomesByGroupe(idG: number) {
+    const groupes = await this.prisma.groupe.findMany({
+      where: { idG },
+      select: {
+        idG: true,
+        nom: true,
+        binomes: {
+          select: {
+            etudiant: {
+              select: {
+                idB: true,
+                matricule: true,
+                user: {
+                  select: {
+                    nom: true,
+                    prenom: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (groupes.length === 0)
+      throw new ForbiddenException('Cannot find any binomes');
+
+    const result = groupes.flatMap((groupe) => {
+      const binomesGrouped: Record<
+        number,
+        {
+          idB: number;
+          matricule: string;
+          fullName: string;
+          groupe: string;
+        }[]
+      > = {};
+
+      groupe.binomes.forEach((binome) => {
+        binome.etudiant.forEach((etudiant) => {
+          if (!etudiant.idB) return;
+          if (!binomesGrouped[etudiant.idB]) binomesGrouped[etudiant.idB] = [];
+
+          binomesGrouped[etudiant.idB].push({
+            idB: etudiant.idB,
+            matricule: etudiant.matricule,
+            fullName: `${etudiant.user.prenom} ${etudiant.user.nom}`,
+            groupe: groupe.nom,
+          });
+        });
+      });
+
+      return Object.values(binomesGrouped).flat();
+    });
+
+    return result;
+  }
+
+  async getDataBinome(idB: number) {
+    const binome = await this.prisma.binome.findUnique({
+      where: { idB },
+      select: {
+        etudiant: {
+          select: {
+            idU: true,
+            user: {
+              select: {
+                nom: true,
+                prenom: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!binome) {
+      throw new ForbiddenException('cannot find binome');
+    }
+
+    return binome.etudiant.map((etud) => ({
+      idU: etud.idU,
+      nom: etud.user.nom,
+      prenom: etud.user.prenom,
+    }));
+  }
+  async unlinkStudentsFromBinome(ids: number[]) {
+    try {
+      const deletedStudents = await this.prisma.etudiant.updateMany({
+        where: {
+          idU: {
+            in: ids,
+          },
+        },
+        data: {
+          idB: null,
+        },
+      });
+
+      if (deletedStudents.count === 0) {
+        throw new Error('No students found to delete');
+      }
+
+      return {
+        message: 'Students deleted successfully',
+        deletedCount: deletedStudents.count,
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Error deleting students: ${error.message}`);
+      }
+      throw new Error('Error deleting students: Unknown error');
+    }
+  }
+
+  async updateStudentsGroups(updateDto: UpdateBinomeGroupDto) {
+    const updates = updateDto.updates;
+
+    if (updates.length === 1) {
+      const binome = await this.prisma.binome.create({
+        data: {
+          idG: updates[0].groupId,
+        },
+      });
+
+      await this.prisma.etudiant.update({
+        where: {
+          idU: updates[0].studentId,
+        },
+        data: {
+          idB: binome.idB,
+        },
+      });
+    } else if (updates.length === 2) {
+      if (updates[0].groupId === updates[1].groupId) {
+        const binome = await this.prisma.binome.create({
+          data: {
+            idG: updates[0].groupId,
+          },
+        });
+
+        const updatePromises = updates.map(async (update) => {
+          return this.prisma.etudiant.update({
+            where: {
+              idU: update.studentId,
+            },
+            data: {
+              idB: binome.idB,
+            },
+          });
+        });
+
+        await Promise.all(updatePromises);
+      } else {
+        const binomePromises = updates.map(async (update) => {
+          const binome = await this.prisma.binome.create({
+            data: {
+              idG: update.groupId,
+            },
+          });
+
+          await this.prisma.etudiant.update({
+            where: {
+              idU: update.studentId,
+            },
+            data: {
+              idB: binome.idB,
+            },
+          });
+        });
+
+        await Promise.all(binomePromises);
+      }
+    }
+
+    return { message: 'Binômes updated successfully', updates };
+  }
 }

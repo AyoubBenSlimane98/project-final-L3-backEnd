@@ -6,8 +6,11 @@ import { CodeOtpService } from 'src/code-otp/code-otp.service';
 import { AuthenticationService } from './authentication.service';
 import { AtStrategy, RtStrategy } from './strategyes';
 import { JwtService } from '@nestjs/jwt';
+import { TokenModule } from 'src/token/token.module';
+import { EncryptionModule } from 'src/encryption/encryption.module';
 
 @Module({
+  imports: [TokenModule, EncryptionModule],
   providers: [
     PrismaService,
     EmailService,

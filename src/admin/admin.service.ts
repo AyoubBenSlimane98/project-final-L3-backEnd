@@ -14,15 +14,17 @@ import {
   AdminPasswordDto,
 } from './dto';
 import { generateOTP } from 'src/util';
-import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
+import { EncryptionService } from 'src/encryption/encryption.service';
+import { TokenService } from 'src/token/token.service';
 
 @Injectable()
 export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly jwtService: JwtService,
+    private readonly tokenService: TokenService,
+    private readonly encryptionService: EncryptionService,
   ) {}
+
   async getAllUsers() {
     const allusers = await this.prisma.compte.findMany({
       relationLoadStrategy: 'join',
@@ -71,10 +73,55 @@ export class AdminService {
     return nonAdminUsers;
   }
 
+  // async deleteUser(email: string) {
+  //   const compte = await this.prisma.compte.findUnique({
+  //     where: { email },
+  //   });
+
+  //   if (!compte) {
+  //     throw new NotFoundException('Compte not found');
+  //   }
+
+  //   const user = await this.prisma.utilisateur.findUnique({
+  //     where: { idC: compte.idC },
+  //     select: {
+  //       idU: true,
+  //       etudiant: true,
+  //       enseignant: true,
+  //     },
+  //   });
+
+  //   if (!user) throw new NotFoundException('Utilisateur not found');
+  //   await this.prisma.compte.delete({ where: { email } });
+  //   await this.prisma.utilisateur.delete({ where: { idU: user.idU } });
+  //   // if (user?.etudiant) {
+  //   //   await this.prisma.etudiant.delete({
+  //   //     where: { userId: user.etudiant.userId },
+  //   //   });
+  //   // }
+
+  //   // if (user?.enseignant) {
+  //   //   await this.prisma.enseignantPrincipal.delete({
+  //   //     where: { enseignantId: user?.enseignant.userId },
+  //   //   });
+  //   //   await this.prisma.enseignant.delete({
+  //   //     where: { userId: user.enseignant.userId },
+  //   //   });
+  //   // }
+
+  //   // await this.prisma.utilisateur.delete({
+  //   //   where: { id: user?.id },
+  //   // });
+
+  //   // await this.prisma.compte.delete({
+  //   //   where: { id: compte.id },
+  //   // });
+
+  //   return { message: 'User and related records deleted successfully' };
+  // }
   async deleteUser(email: string) {
     const compte = await this.prisma.compte.findUnique({
       where: { email },
-      select: { id: true },
     });
 
     if (!compte) {
@@ -82,50 +129,56 @@ export class AdminService {
     }
 
     const user = await this.prisma.utilisateur.findUnique({
-      where: { compteId: compte.id },
+      where: { idC: compte.idC },
       select: {
-        id: true,
+        idU: true,
         etudiant: true,
         enseignant: true,
       },
     });
 
+    if (!user) throw new NotFoundException('Utilisateur not found');
+
+    // Delete related student data if user is a student
     if (user?.etudiant) {
       await this.prisma.etudiant.delete({
-        where: { userId: user.etudiant.userId },
+        where: { idU: user.idU },
       });
     }
 
+    // Delete related teacher data if user is a teacher
     if (user?.enseignant) {
       await this.prisma.enseignantPrincipal.delete({
-        where: { enseignantId: user?.enseignant.id },
+        where: { idU: user.idU },
       });
       await this.prisma.enseignant.delete({
-        where: { userId: user.enseignant.userId },
+        where: { idU: user.idU },
       });
     }
 
+    // Finally delete the user and account
     await this.prisma.utilisateur.delete({
-      where: { id: user?.id },
+      where: { idU: user.idU },
     });
 
     await this.prisma.compte.delete({
-      where: { id: compte.id },
+      where: { email },
     });
-
-    return { message: 'User and related records deleted successfully' };
+    return {
+      messsage: 'deleted sucess',
+    };
   }
 
   async getAdmin(sub: number) {
     const existentAdmin = await this.prisma.compte.findUnique({
       relationLoadStrategy: 'join',
-      where: { id: sub },
+      where: { idC: sub },
       select: {
         email: true,
         user: {
           omit: {
-            id: true,
-            compteId: true,
+            idU: true,
+            idC: true,
           },
         },
       },
@@ -135,9 +188,19 @@ export class AdminService {
     }
     return existentAdmin;
   }
+
+  async getProfileById(idU: number) {
+    return await this.prisma.utilisateur.findUnique({
+      where: { idU: idU },
+      select: {
+        bio: true,
+        image: true,
+      },
+    });
+  }
   async getProfile(sub: number) {
     const existentCompte = await this.prisma.compte.findUnique({
-      where: { id: sub },
+      where: { idC: sub },
       select: {
         user: true,
       },
@@ -146,17 +209,18 @@ export class AdminService {
       throw new UnauthorizedException('you can not created this annonce');
     }
     return await this.prisma.utilisateur.findUnique({
-      where: { id: existentCompte.user?.id },
+      where: { idU: existentCompte.user?.idU },
       select: {
         bio: true,
         image: true,
       },
     });
   }
+
   async getAllAnnounces(sub: number) {
     const admin = await this.prisma.compte.findUnique({
       where: {
-        id: sub,
+        idC: sub,
       },
       include: {
         user: true,
@@ -165,12 +229,12 @@ export class AdminService {
     if (!admin) throw new ForbiddenException('you can not get all annonces!');
 
     const annoces = await this.prisma.administrateur.findUnique({
-      where: { userId: admin.user?.id },
-      omit: { id: true, userId: true },
+      where: { idU: admin.user?.idU },
+      omit: { idU: true },
       include: {
         annonces: {
           omit: {
-            adminId: true,
+            idU: true,
           },
           orderBy: {
             createdAt: 'desc',
@@ -183,6 +247,7 @@ export class AdminService {
     }
     return annoces;
   }
+
   async createAccount(adminSignupDto: AdminSignupDto) {
     const otp = generateOTP();
     const { email, password, nom, prenom, sexe, dateNaissance } =
@@ -197,23 +262,27 @@ export class AdminService {
     }
 
     const catNom = nom.slice(0, 3);
-    const defaultImageUrl =
-      'https://scontent.fczl2-2.fna.fbcdn.net/v/t1.30497-1/453178253_471506465671661_2781666950760530985_n.png?stp=dst-png_s480x480&_nc_cat=1&ccb=1-7&_nc_sid=136b72&_nc_eui2=AeF_OWSBlL4_ahZGK8uktg7YWt9TLzuBU1Ba31MvO4FTUAcNr-rcAk0Q6wgee_n1MVfJVXKEYXEpVc_A8npzsuDs&_nc_ohc=pCF_EXqQ5MYQ7kNvwGqbQH8&_nc_oc=AdmOQDv_qA9yPoDAQK2j4m8cM77HYt2osPaGYZiWQNIR41-_Kkg1lN_m_n79WacUl90&_nc_zt=24&_nc_ht=scontent.fczl2-2.fna&oh=00_AfEfE4VyUFM1gD2VkajBmRMamhtVSp2NpcihUNDqLsAtzg&oe=681B903A';
+
     const defaultBio = `@${prenom}_${catNom}_${otp.slice(0, 3)}`;
 
     const result = await this.prisma.$transaction(async (tx) => {
       const newCompte = await tx.compte.create({
         data: {
           email,
-          password: await this.hashPassword(password),
+          password: await this.encryptionService.hashPassword(password),
         },
       });
-      const tokens = await this.getTokens(newCompte.id, newCompte.email);
+      const tokens = await this.tokenService.getTokens(
+        newCompte.idC,
+        newCompte.email,
+      );
       await tx.token.create({
         data: {
           accessToken: tokens.accessToken,
-          refreshtoken: await this.hashPassword(tokens.refreshtoken),
-          compteId: newCompte.id,
+          refreshtoken: await this.encryptionService.hashPassword(
+            tokens.refreshtoken,
+          ),
+          compteId: newCompte.idC,
         },
       });
       const newUser = await tx.utilisateur.create({
@@ -221,16 +290,15 @@ export class AdminService {
           nom,
           prenom,
           sexe,
-          image: defaultImageUrl,
           bio: defaultBio,
           dateNaissance,
-          compteId: newCompte.id,
+          idC: newCompte.idC,
         },
       });
 
       await tx.administrateur.create({
         data: {
-          userId: newUser.id,
+          idU: newUser.idU,
         },
       });
       return {
@@ -240,10 +308,18 @@ export class AdminService {
     });
     return result;
   }
+
   async createAnnonce(adminAnnonce: AdminAnnonce, sub: number) {
     const { titre, description, image } = adminAnnonce;
+    const user = await this.prisma.utilisateur.findUnique({
+      where: {
+        idC: sub,
+      },
+    });
+    if (!user)
+      throw new UnauthorizedException('you can not created this annonce');
     const existentAdmin = await this.prisma.administrateur.findUnique({
-      where: { userId: sub },
+      where: { idU: user.idU },
     });
     if (!existentAdmin) {
       throw new UnauthorizedException('you can not created this annonce');
@@ -253,7 +329,7 @@ export class AdminService {
         titre,
         description,
         image,
-        adminId: existentAdmin.id,
+        idU: existentAdmin.idU,
       },
     });
     return {
@@ -261,38 +337,16 @@ export class AdminService {
       message: 'created new Annonce successful!',
     };
   }
-  async getTokens(userId: number, email: string) {
-    const [at, rt] = await Promise.all([
-      this.jwtService.signAsync(
-        { sub: userId, email },
-        {
-          expiresIn: '15m',
-          secret: process.env.JWT_AT_SECRET,
-        },
-      ),
-      this.jwtService.signAsync(
-        { sub: userId, email },
-        {
-          expiresIn: '30d',
-          secret: process.env.JWT_RT_SECRET,
-        },
-      ),
-    ]);
 
-    return {
-      accessToken: at,
-      refreshtoken: rt,
-    };
-  }
   async deleteAnnonce(sub: number, id: number) {
     const existentUser = await this.prisma.utilisateur.findUnique({
       where: {
-        compteId: sub,
+        idC: sub,
       },
       select: {
         admin: {
           select: {
-            userId: true,
+            idU: true,
           },
         },
       },
@@ -303,29 +357,30 @@ export class AdminService {
 
     const existAnnoce = await this.prisma.annonce.findMany({
       where: {
-        id,
-        adminId: existentUser.admin?.userId,
+        idA: id,
+        idU: existentUser.admin?.idU,
       },
     });
     if (!existAnnoce) throw new ForbiddenException('can not deleted this post');
     await this.prisma.annonce.delete({
       where: {
-        id,
+        idA: id,
       },
     });
     return {
       message: 'Annoces is Deleted succesfull!',
     };
   }
+
   async updateAnnonce(sub: number, id: number, adminAnnonce: AdminAnnonce) {
     const existentUser = await this.prisma.utilisateur.findUnique({
       where: {
-        compteId: sub,
+        idC: sub,
       },
       select: {
         admin: {
           select: {
-            userId: true,
+            idU: true,
           },
         },
       },
@@ -336,14 +391,14 @@ export class AdminService {
 
     const existAnnoce = await this.prisma.annonce.findMany({
       where: {
-        id,
-        adminId: existentUser.admin?.userId,
+        idA: id,
+        idU: existentUser.admin?.idU,
       },
     });
     if (!existAnnoce) throw new ForbiddenException('can not deleted this post');
     await this.prisma.annonce.update({
       where: {
-        id,
+        idA: id,
       },
       data: {
         ...adminAnnonce,
@@ -353,15 +408,16 @@ export class AdminService {
       message: 'Annoces is Deleted succesfull!',
     };
   }
+
   async updateImageProfile(sub: number, image: string) {
     const existUser = await this.prisma.utilisateur.findUnique({
-      where: { compteId: sub },
+      where: { idC: sub },
     });
     if (!existUser)
       throw new ForbiddenException('not user with this information ');
     await this.prisma.utilisateur.update({
       where: {
-        id: existUser.id,
+        idU: existUser.idU,
       },
       data: {
         image,
@@ -371,15 +427,16 @@ export class AdminService {
       message: 'image profil change',
     };
   }
+
   async updateInfoProfile(sub: number, adminInfoProfil: AdminInfoProfil) {
     const existUser = await this.prisma.utilisateur.findUnique({
-      where: { compteId: sub },
+      where: { idC: sub },
     });
     if (!existUser)
       throw new ForbiddenException('not user with this information ');
     await this.prisma.utilisateur.update({
       where: {
-        id: existUser.id,
+        idU: existUser.idU,
       },
       data: {
         ...adminInfoProfil,
@@ -389,25 +446,26 @@ export class AdminService {
       message: 'info profil change',
     };
   }
+
   async updatepasswordProfile(sub: number, adminPasswordDto: AdminPasswordDto) {
     const { newPassword, oldPassword } = adminPasswordDto;
     const existCompte = await this.prisma.compte.findUnique({
-      where: { id: sub },
+      where: { idC: sub },
     });
     if (!existCompte)
       throw new ForbiddenException('not user with this information ');
 
-    const isMatches = await this.comparePasswords(
+    const isMatches = await this.encryptionService.comparePasswords(
       oldPassword,
       existCompte.password,
     );
     if (!isMatches) {
       throw new ForbiddenException('pld password not correct ');
     }
-    const hash = await this.hashPassword(newPassword);
+    const hash = await this.encryptionService.hashPassword(newPassword);
     await this.prisma.compte.update({
       where: {
-        id: sub,
+        idC: sub,
       },
       data: {
         password: hash,
@@ -417,16 +475,4 @@ export class AdminService {
       message: 'password change ',
     };
   }
-  hashPassword = async (plainPassword: string): Promise<string> => {
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(plainPassword, saltRounds);
-    return hashedPassword;
-  };
-  comparePasswords = async (
-    plainPassword: string,
-    hashedPassword: string,
-  ): Promise<boolean> => {
-    const isMatch = await bcrypt.compare(plainPassword, hashedPassword);
-    return isMatch;
-  };
 }

@@ -16,7 +16,7 @@ export class CodeOtpService {
     }
     await this.prisma.codeOTP.upsert({
       where: {
-        compteId: compte.id,
+        compteId: compte.idC,
       },
       update: {
         code: otp,
@@ -27,7 +27,7 @@ export class CodeOtpService {
         expiresAt: expiresAt,
         compte: {
           connect: {
-            id: compte.id,
+            idC: compte.idC,
           },
         },
       },
@@ -44,7 +44,7 @@ export class CodeOtpService {
     }
     const otpRecord = await this.prisma.codeOTP.findFirst({
       where: {
-        compteId: compte.id,
+        compteId: compte.idC,
         code: otp,
       },
     });
