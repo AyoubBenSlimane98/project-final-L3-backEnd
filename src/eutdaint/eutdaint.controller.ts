@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { EutdaintService } from './eutdaint.service';
 import { CompteID, Public } from 'src/authentication/common/decorators';
-import { QuestionDto } from './dto';
+import { CreateTacheDto, QuestionDto } from './dto';
 
 @Controller('eutdaint')
 export class EutdaintController {
@@ -56,5 +56,10 @@ export class EutdaintController {
   @Post('question')
   async createQuestion(@Body() questionDto: QuestionDto) {
     return await this.eutdaintService.createQuestion(questionDto);
+  }
+  @Public()
+  @Post('deposer-rapport')
+  async createRapport(@Body() createTacheDto: CreateTacheDto) {
+    return await this.eutdaintService.createRapport(createTacheDto);
   }
 }

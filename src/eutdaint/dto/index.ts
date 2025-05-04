@@ -1,1 +1,2 @@
 export * from './etudiant.question.dto';
+export * from './etudiant.rapport.dto';

@@ -5,11 +5,13 @@ import {
 } from '@nestjs/common';
 
 import { PrismaService } from 'src/prisma/prisma.service';
-import { QuestionDto } from './dto';
+import { CreateTacheDto, QuestionDto } from './dto';
+import { TacheNom } from '@prisma/client';
 
 @Injectable()
 export class EutdaintService {
   constructor(private readonly prisma: PrismaService) {}
+
   async getAllAnnoces() {
     const annoces = await this.prisma.annonce.findMany();
     if (annoces.length == 0)
@@ -262,5 +264,65 @@ export class EutdaintService {
       idB: binome.idB,
       idG: binome.idG,
     };
+  }
+
+  async createRapport(createTacheDto: CreateTacheDto) {
+    const { idB, description, nom, rapportUrl, tache } = createTacheDto;
+
+    const binomes = await this.prisma.binome.findUnique({
+      where: { idB },
+    });
+
+    if (!binomes) {
+      throw new ForbiddenException('Cannot find binôme');
+    }
+
+    const tacheNom: TacheNom = TacheNom[tache as keyof typeof TacheNom];
+    if (!tacheNom) {
+      throw new ForbiddenException('Invalid tâche value');
+    }
+
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        const rapport = await tx.rapport.create({
+          data: {
+            titre: nom,
+            idB,
+          },
+        });
+
+        await tx.versionRapport.create({
+          data: {
+            description,
+            lien: rapportUrl,
+            idR: rapport.idR,
+          },
+        });
+
+        await tx.rapportTâches.create({
+          data: {
+            idR: rapport.idR,
+          },
+        });
+
+        await tx.tâches.create({
+          data: {
+            nom: tacheNom,
+            idR: rapport.idR,
+          },
+        });
+
+        return {
+          message: 'Rapport created successfully',
+        };
+      });
+
+      return result;
+    } catch (error) {
+      console.error(error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new ForbiddenException('Transaction failed: ' + errorMessage);
+    }
   }
 }
