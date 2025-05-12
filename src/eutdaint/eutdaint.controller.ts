@@ -18,7 +18,10 @@ export class EutdaintController {
   async getInfoEtudiant(@CompteID('sub', ParseIntPipe) sub: number) {
     return await this.eutdaintService.getInfoEtudiant(sub);
   }
-
+  @Get('note/:idU')
+  async getNoteEtapesForEtudiant(@Param('idU', ParseIntPipe) idU: number) {
+    return this.eutdaintService.getNoteEtapEtudiant(idU);
+  }
   @Public()
   @Get('binomes/:idB')
   async getBinomeData(@Param('idB', ParseIntPipe) idB: number) {

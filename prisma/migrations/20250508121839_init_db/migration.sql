@@ -2,6 +2,12 @@
 CREATE TYPE "EtatPresence" AS ENUM ('PRESENT', 'ABSENT');
 
 -- CreateEnum
+CREATE TYPE "EtapeNom" AS ENUM ('Analyse', 'Conception', 'Developpement');
+
+-- CreateEnum
+CREATE TYPE "TacheNom" AS ENUM ('DiagrammeCasUtilisation', 'DescriptionTextuelle', 'DescriptionGraphique', 'DiagrammeClasseParticipative', 'IHM', 'DiagrammeClasse', 'DiagrammeSequenceDetaille', 'Developpement');
+
+-- CreateEnum
 CREATE TYPE "SexeUtilisateur" AS ENUM ('Male', 'Female');
 
 -- CreateEnum
@@ -78,7 +84,7 @@ CREATE TABLE "Etudiant" (
     "idU" INTEGER NOT NULL,
     "matricule" TEXT NOT NULL,
     "noteFinal" DOUBLE PRECISION,
-    "idB" INTEGER NOT NULL,
+    "idB" INTEGER,
 
     CONSTRAINT "Etudiant_pkey" PRIMARY KEY ("idU")
 );
@@ -157,6 +163,7 @@ CREATE TABLE "Sujet" (
     "idS" SERIAL NOT NULL,
     "titre" TEXT NOT NULL,
     "description" TEXT NOT NULL,
+    "idR" INTEGER,
     "enseignantRId" INTEGER,
 
     CONSTRAINT "Sujet_pkey" PRIMARY KEY ("idS")
@@ -183,10 +190,11 @@ CREATE TABLE "prerequisSujet" (
 -- CreateTable
 CREATE TABLE "Cas" (
     "idCas" SERIAL NOT NULL,
-    "titre" TEXT NOT NULL,
-    "détails" TEXT NOT NULL,
+    "acteur" TEXT NOT NULL,
+    "cas" TEXT NOT NULL,
+    "statut" BOOLEAN NOT NULL DEFAULT false,
     "idS" INTEGER NOT NULL,
-    "idB" INTEGER NOT NULL,
+    "idB" INTEGER,
 
     CONSTRAINT "Cas_pkey" PRIMARY KEY ("idCas")
 );
@@ -217,7 +225,6 @@ CREATE TABLE "Rapport" (
     "idR" SERIAL NOT NULL,
     "titre" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "idS" INTEGER NOT NULL,
     "idB" INTEGER NOT NULL,
 
     CONSTRAINT "Rapport_pkey" PRIMARY KEY ("idR")
@@ -247,9 +254,10 @@ CREATE TABLE "RapportTâches" (
 -- CreateTable
 CREATE TABLE "Etape" (
     "idEtape" SERIAL NOT NULL,
+    "nom" "EtapeNom" NOT NULL,
     "dateDebut" TIMESTAMP(3) NOT NULL,
     "dateFin" TIMESTAMP(3) NOT NULL,
-    "rapportEtapeId" INTEGER NOT NULL,
+    "idR" INTEGER,
     "idS" INTEGER NOT NULL,
 
     CONSTRAINT "Etape_pkey" PRIMARY KEY ("idEtape")
@@ -258,8 +266,11 @@ CREATE TABLE "Etape" (
 -- CreateTable
 CREATE TABLE "Tâches" (
     "idTache" SERIAL NOT NULL,
-    "description" TEXT NOT NULL,
-    "idR" INTEGER NOT NULL,
+    "nom" TEXT NOT NULL,
+    "dateDebut" TIMESTAMP(3) NOT NULL,
+    "dateFin" TIMESTAMP(3) NOT NULL,
+    "idR" INTEGER,
+    "idEtape" INTEGER NOT NULL,
 
     CONSTRAINT "Tâches_pkey" PRIMARY KEY ("idTache")
 );
@@ -268,8 +279,8 @@ CREATE TABLE "Tâches" (
 CREATE TABLE "Question" (
     "idQ" SERIAL NOT NULL,
     "question" TEXT NOT NULL,
-    "reponse" TEXT NOT NULL,
-    "etat" "QuestionEtat" NOT NULL,
+    "reponse" TEXT,
+    "etat" "QuestionEtat" NOT NULL DEFAULT 'attandre',
     "etudiantId" INTEGER NOT NULL,
     "enseignantRId" INTEGER NOT NULL,
 
@@ -336,10 +347,10 @@ CREATE UNIQUE INDEX "Etudiant_matricule_key" ON "Etudiant"("matricule");
 CREATE UNIQUE INDEX "Groupe_idS_key" ON "Groupe"("idS");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Rapport_idS_key" ON "Rapport"("idS");
+CREATE UNIQUE INDEX "Sujet_idR_key" ON "Sujet"("idR");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Etape_rapportEtapeId_key" ON "Etape"("rapportEtapeId");
+CREATE UNIQUE INDEX "Etape_idR_key" ON "Etape"("idR");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Tâches_idR_key" ON "Tâches"("idR");
@@ -363,7 +374,7 @@ ALTER TABLE "Presence" ADD CONSTRAINT "Presence_idDP_fkey" FOREIGN KEY ("idDP") 
 ALTER TABLE "Etudiant" ADD CONSTRAINT "Etudiant_idU_fkey" FOREIGN KEY ("idU") REFERENCES "Utilisateur"("idU") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Etudiant" ADD CONSTRAINT "Etudiant_idB_fkey" FOREIGN KEY ("idB") REFERENCES "Binome"("idB") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Etudiant" ADD CONSTRAINT "Etudiant_idB_fkey" FOREIGN KEY ("idB") REFERENCES "Binome"("idB") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Binome" ADD CONSTRAINT "Binome_idG_fkey" FOREIGN KEY ("idG") REFERENCES "Groupe"("idG") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -396,6 +407,9 @@ ALTER TABLE "Administrateur" ADD CONSTRAINT "Administrateur_idU_fkey" FOREIGN KE
 ALTER TABLE "Annonce" ADD CONSTRAINT "Annonce_idU_fkey" FOREIGN KEY ("idU") REFERENCES "Administrateur"("idU") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Sujet" ADD CONSTRAINT "Sujet_idR_fkey" FOREIGN KEY ("idR") REFERENCES "Rapport"("idR") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Sujet" ADD CONSTRAINT "Sujet_enseignantRId_fkey" FOREIGN KEY ("enseignantRId") REFERENCES "EnseignantResponsable"("idU") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -417,9 +431,6 @@ ALTER TABLE "VersionRapport" ADD CONSTRAINT "VersionRapport_idR_fkey" FOREIGN KE
 ALTER TABLE "EvaluationRaport" ADD CONSTRAINT "EvaluationRaport_idR_fkey" FOREIGN KEY ("idR") REFERENCES "Rapport"("idR") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Rapport" ADD CONSTRAINT "Rapport_idS_fkey" FOREIGN KEY ("idS") REFERENCES "Sujet"("idS") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "Rapport" ADD CONSTRAINT "Rapport_idB_fkey" FOREIGN KEY ("idB") REFERENCES "Binome"("idB") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -432,13 +443,16 @@ ALTER TABLE "RapportEtape" ADD CONSTRAINT "RapportEtape_idR_fkey" FOREIGN KEY ("
 ALTER TABLE "RapportTâches" ADD CONSTRAINT "RapportTâches_idR_fkey" FOREIGN KEY ("idR") REFERENCES "Rapport"("idR") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Etape" ADD CONSTRAINT "Etape_rapportEtapeId_fkey" FOREIGN KEY ("rapportEtapeId") REFERENCES "RapportEtape"("idR") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Etape" ADD CONSTRAINT "Etape_idR_fkey" FOREIGN KEY ("idR") REFERENCES "RapportEtape"("idR") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Etape" ADD CONSTRAINT "Etape_idS_fkey" FOREIGN KEY ("idS") REFERENCES "Sujet"("idS") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Tâches" ADD CONSTRAINT "Tâches_idR_fkey" FOREIGN KEY ("idR") REFERENCES "RapportTâches"("idR") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Tâches" ADD CONSTRAINT "Tâches_idR_fkey" FOREIGN KEY ("idR") REFERENCES "RapportTâches"("idR") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Tâches" ADD CONSTRAINT "Tâches_idEtape_fkey" FOREIGN KEY ("idEtape") REFERENCES "Etape"("idEtape") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Question" ADD CONSTRAINT "Question_etudiantId_fkey" FOREIGN KEY ("etudiantId") REFERENCES "Etudiant"("idU") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -7,10 +7,13 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-
+enum EtatRapport {
+  Accepté
+  Rejeté
+}
 enum EtatPresence {
-  PRESENT
-  ABSENT
+  Present
+  Absent
 }
 enum EtapeNom {
   Analyse
@@ -192,15 +195,12 @@ model Sujet {
   idS                   Int                    @id @default(autoincrement())
   titre                 String
   description           String
-  idR                  Int? @unique
-  rapport              Rapport?               @relation(fields: [idR], references: [idR])
   enseignantRId         Int?
   enseignantResponsable EnseignantResponsable? @relation(fields: [enseignantRId], references: [idU], onDelete: Cascade)
   reference             referencesSujet[]
   prerequis             prerequisSujet[]
   cas                   Cas[]
   etapes                Etape[]
-  
   Groupe                Groupe?
 }
 
@@ -240,7 +240,7 @@ model VersionRapport {
 
 model EvaluationRaport {
   idER        Int      @id @default(autoincrement())
-  description String
+  statut      EtatRapport  
   updatedAt   DateTime @updatedAt
   idR         Int
   rapport     Rapport  @relation(fields: [idR], references: [idR], onDelete: Cascade)
@@ -258,7 +258,6 @@ model Rapport {
   idB               Int
   binome            Binome             @relation(fields: [idB], references: [idB], onDelete: Cascade)
   FeedBack          FeedBack[]
-  Sujet Sujet?
 }
 
 model RapportFinal {
@@ -281,10 +280,10 @@ model RapportTâches {
 model Etape {
   idEtape        Int          @id @default(autoincrement())
   nom            EtapeNom
-  dateDebut      DateTime?
-  dateFin        DateTime?
-  idR Int          @unique
-  rapportEtape   RapportEtape @relation(fields: [idR], references: [idR])
+  dateDebut      DateTime
+  dateFin        DateTime
+  idR Int?          @unique
+  rapportEtape   RapportEtape? @relation(fields: [idR], references: [idR])
   idS            Int
   sujet          Sujet        @relation(fields: [idS], references: [idS], onDelete: Cascade)
   note           Note[]
@@ -294,12 +293,12 @@ model Etape {
 model Tâches {
   idTache        Int            @id @default(autoincrement())
   nom            String
-  dateDebut      DateTime?
-  dateFin        DateTime?
-  idR            Int            @unique
-  rapportTâches RapportTâches @relation(fields: [idR], references: [idR])
-  idEtape        Int?
-  etape         Etape?         @relation(fields: [idEtape], references: [idEtape])
+  dateDebut      DateTime
+  dateFin        DateTime
+  idR            Int?            @unique
+  rapportTâches RapportTâches? @relation(fields: [idR], references: [idR])
+  idEtape        Int
+  etape         Etape         @relation(fields: [idEtape], references: [idEtape])
 }
 
 model Question {

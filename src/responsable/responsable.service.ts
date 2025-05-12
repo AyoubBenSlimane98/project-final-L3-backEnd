@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
+  CreateEtapePayloadDTO,
   CreateReunionDto,
   CreateSujetDto,
   QuestionsOfGroupeDto,
@@ -13,6 +14,7 @@ import {
   UpdateResponsabiliteDto,
 } from './dto';
 import { SetCasDto } from 'src/principal/dto';
+import { EtapeNom, EtatPresence, EtatRapport, TacheNom } from '@prisma/client';
 
 @Injectable()
 export class ResponsableService {
@@ -515,6 +517,7 @@ export class ResponsableService {
       idS: groupe.idS,
     };
   }
+
   async updateCasofSujet(
     idS: number,
     idB: number,
@@ -530,6 +533,7 @@ export class ResponsableService {
     await Promise.all(updates);
     return { message: 'Cas updated successfully' };
   }
+
   async updateResponsabiliteBinome(idB: number, dto: UpdateResponsabiliteDto) {
     const binome = await this.prisma.binome.findUnique({
       where: { idB },
@@ -542,12 +546,11 @@ export class ResponsableService {
     if (!binome)
       throw new ForbiddenException(`Aucun binôme trouvé avec l'ID ${idB}`);
 
-    // التحقق من أن نفس المسؤولية غير مستخدمة في نفس المجموعة من قبل بنوم آخر
     const existing = await this.prisma.binome.findFirst({
       where: {
         idG: binome.idG,
         responsabilite: dto.responsabilite,
-        NOT: { idB }, // استثناء البنوم الحالي
+        NOT: { idB },
       },
     });
 
@@ -557,7 +560,6 @@ export class ResponsableService {
       );
     }
 
-    // تحديث المسؤولية
     await this.prisma.binome.update({
       where: { idB },
       data: {
@@ -566,5 +568,329 @@ export class ResponsableService {
     });
 
     return { message: 'Responsabilité affectée avec succès !' };
+  }
+
+  async createEtapeTache(
+    idS: number,
+    createEtapePayloadDTO: CreateEtapePayloadDTO,
+  ) {
+    console.log(idS, createEtapePayloadDTO);
+    const { etape, taches } = createEtapePayloadDTO;
+
+    const etapeNom = EtapeNom[etape.etape as keyof typeof EtapeNom];
+    if (!etapeNom) {
+      throw new ForbiddenException('Invalid Etape value');
+    }
+    const existingEtape = await this.prisma.etape.findFirst({
+      where: {
+        nom: etapeNom,
+        idS,
+      },
+    });
+    if (existingEtape) {
+      throw new ForbiddenException(
+        `Etape with the same name and dates already exists for this sujet`,
+      );
+    }
+    const createdEtape = await this.prisma.etape.create({
+      data: {
+        nom: etapeNom,
+        dateDebut: new Date(etape.dateDebut),
+        dateFin: new Date(etape.dateFin),
+        idS,
+      },
+    });
+
+    if (taches && taches.length > 0) {
+      await Promise.all(
+        taches.map(
+          (tache: { tache: string; dateDebut: string; dateFin: string }) => {
+            const nomTache = TacheNom[tache.tache as keyof typeof TacheNom];
+            if (!nomTache) {
+              throw new ForbiddenException(
+                `Invalid Tache value: ${tache.tache}`,
+              );
+            }
+
+            return this.prisma.tâches.create({
+              data: {
+                nom: nomTache,
+                dateDebut: new Date(tache.dateDebut),
+                dateFin: new Date(tache.dateFin),
+                idEtape: createdEtape.idEtape,
+              },
+            });
+          },
+        ),
+      );
+    }
+
+    return createdEtape;
+  }
+
+  async getAllDates() {
+    const dates = await this.prisma.datePresence.findMany({
+      select: {
+        idDP: true,
+        date: true,
+      },
+    });
+    if (!dates || dates.length === 0)
+      throw new ForbiddenException('Cannot find any date');
+    return dates.map((date) => ({
+      idDP: date.idDP,
+      date: new Date(date.date).toISOString().split('T')[0], // Format YYYY-MM-DD
+    }));
+  }
+  async getAllEtudiantOfGroupe(idG: number) {
+    const groupe = await this.prisma.groupe.findUnique({
+      where: { idG },
+    });
+
+    if (!groupe) throw new Error('No group found');
+
+    const binomes = await this.prisma.binome.findMany({
+      where: { idG: groupe.idG },
+      select: {
+        etudiant: {
+          select: {
+            idU: true,
+            user: {
+              select: {
+                nom: true,
+                prenom: true,
+              },
+            },
+            presences: {
+              select: {
+                idDP: true,
+                etat: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!binomes || binomes.length === 0) throw new Error('No binomes found');
+
+    const etudiants = binomes.flatMap((binome) =>
+      binome.etudiant.map((etu) => ({
+        idU: etu.idU,
+        fullName: `${etu.user.nom} ${etu.user.prenom}`,
+        presences: etu.presences,
+      })),
+    );
+
+    return etudiants;
+  }
+  async setAbasenceEtudiant(idU: number, idDP: number, etat: string) {
+    if (!['Absent', 'Present'].includes(etat)) {
+      throw new Error("Valeur de l'état non valide");
+    }
+
+    const etatPresence: EtatPresence = etat as EtatPresence;
+
+    try {
+      await this.prisma.presence.upsert({
+        where: {
+          etudiantId_idDP: {
+            etudiantId: idU,
+            idDP: idDP,
+          },
+        },
+        update: {
+          etat: etatPresence, // تحديث الحضور/الغياب
+        },
+        create: {
+          idDP: idDP,
+          etudiantId: idU,
+          etat: etatPresence || 'Absent', // تعيين قيمة افتراضية "Absent" إذا كانت القيمة فارغة
+        },
+      });
+      return { message: 'update precence' };
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour de la présence :', error);
+      throw new Error('Impossible de mettre à jour la présence');
+    }
+  }
+
+  async getAllStudent() {
+    return await this.prisma.etudiant.findMany({
+      select: {
+        idU: true,
+        presences: {
+          select: {
+            idDP: true,
+          },
+        },
+      },
+    });
+  }
+  async getAllEtapesOfGroupe(idG: number) {
+    const groupe = await this.prisma.groupe.findUnique({
+      where: {
+        idG,
+      },
+      select: {
+        idS: true,
+      },
+    });
+    if (!groupe) throw new ForbiddenException('cannot found any groupe');
+    if (groupe.idS === null)
+      throw new ForbiddenException('cannot found any groupe');
+    return await this.prisma.etape.findMany({
+      where: {
+        idS: groupe.idS,
+      },
+      select: {
+        idEtape: true,
+        nom: true,
+      },
+    });
+  }
+
+  async getAllTacheOfEtapeByBinome(idB: number, idEtape: number) {
+    const taches = await this.prisma.tâches.findMany({
+      where: {
+        idEtape: idEtape,
+        idR: {
+          not: null,
+        },
+        rapportTâches: {
+          is: {
+            rapport: {
+              is: {
+                idB: idB,
+              },
+            },
+          },
+        },
+      },
+      select: {
+        nom: true,
+        idR: true,
+        dateFin: true,
+      },
+    });
+
+    if (taches.length === 0) {
+      throw new ForbiddenException(
+        'No tasks found for this binome in this step',
+      );
+    }
+
+    const results = await Promise.all(
+      taches.map(async (item) => {
+        const statutRapport = await this.prisma.evaluationRaport.findFirst({
+          where: {
+            idR: item.idR as number,
+          },
+        });
+        const lastVersion = await this.prisma.versionRapport.findFirst({
+          where: { idR: item.idR as number },
+          orderBy: { updatedAt: 'desc' },
+          select: {
+            description: true,
+            lien: true,
+            updatedAt: true,
+            rapport: {
+              select: {
+                titre: true,
+              },
+            },
+          },
+        });
+
+        return {
+          idR: item.idR,
+          tacheNom: item.nom,
+          dateFin: item.dateFin,
+          rapport: lastVersion?.rapport?.titre,
+          versionDescription: lastVersion?.description,
+          lien: lastVersion?.lien,
+          updatedAt: lastVersion?.updatedAt,
+          statut: statutRapport?.statut ?? ' Rejeté',
+        };
+      }),
+    );
+
+    return results;
+  }
+
+  async updateEvaluationRapport(idR: number, statutStr: string) {
+    const statut: EtatRapport = statutStr as EtatRapport;
+
+    const existing = await this.prisma.evaluationRaport.findFirst({
+      where: { idR: idR },
+    });
+
+    if (existing) {
+      return await this.prisma.evaluationRaport.update({
+        where: { idER: existing.idER },
+        data: { statut },
+      });
+    } else {
+      return await this.prisma.evaluationRaport.create({
+        data: {
+          statut,
+          idR,
+        },
+      });
+    }
+  }
+
+  async createOrUpdateNoteEtapes(
+    idB: number,
+    idEtape: number,
+    noteValue: number,
+  ) {
+    const existing = await this.prisma.note.findFirst({
+      where: {
+        idB,
+        idEtape,
+      },
+    });
+
+    if (existing) {
+      return await this.prisma.note.update({
+        where: {
+          idEtape_idB: {
+            idEtape,
+            idB,
+          },
+        },
+        data: { note: noteValue },
+      });
+    } else {
+      return await this.prisma.note.create({
+        data: {
+          idB,
+          idEtape,
+          note: noteValue,
+        },
+      });
+    }
+  }
+  async setOrUpdateNoteFinal(idU: number, noteFinal: number) {
+    const etudiant = await this.prisma.etudiant.findUnique({
+      where: { idU },
+    });
+
+    if (!etudiant) {
+      throw new NotFoundException(`Etudiant with id ${idU} not found`);
+    }
+
+    const updatedEtudiant = await this.prisma.etudiant.update({
+      where: { idU },
+      data: {
+        noteFinal: noteFinal,
+      },
+    });
+
+    return {
+      message: `Note final ${etudiant.noteFinal === null ? 'set' : 'updated'} successfully.`,
+      noteFinal: updatedEtudiant.noteFinal,
+    };
   }
 }

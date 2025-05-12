@@ -1,6 +1,6 @@
 import { IsInt, IsString, IsNotEmpty } from 'class-validator';
 
-export enum TacheNom {
+export enum TacheNoms {
   DiagrammeCasUtilisation = 'Diagramme de cas d’utilisation',
   DescriptionTextuelle = 'Description Textuelle',
   DescriptionGraphique = 'Description Graphique',
@@ -18,12 +18,15 @@ export class CreateTacheDto {
   @IsInt()
   idG: number;
 
+  @IsInt()
+  idS: number;
+
   @IsString()
   @IsNotEmpty()
   tache: string;
 
   @IsNotEmpty()
-  nom: TacheNom;
+  nom: TacheNoms;
 
   @IsString()
   @IsNotEmpty()

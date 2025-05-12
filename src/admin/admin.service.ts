@@ -12,10 +12,12 @@ import {
   AdminAnnonce,
   AdminInfoProfil,
   AdminPasswordDto,
+  CreatePresenceDto,
 } from './dto';
 import { generateOTP } from 'src/util';
 import { EncryptionService } from 'src/encryption/encryption.service';
 import { TokenService } from 'src/token/token.service';
+import { EtatPresence } from '@prisma/client';
 
 @Injectable()
 export class AdminService {
@@ -474,5 +476,50 @@ export class AdminService {
     return {
       message: 'password change ',
     };
+  }
+  async createDate(dates: string[]) {
+    // Convert string dates to Date objects
+    const parsedDates = dates.map((d) => {
+      const [day, month, year] = d.split('/');
+      return new Date(`${year}-${month}-${day}`);
+    });
+
+    // 1. Find existing dates
+    const existingDates = await this.prisma.datePresence.findMany({
+      where: {
+        date: {
+          in: parsedDates,
+        },
+      },
+      select: {
+        date: true,
+      },
+    });
+
+    if (existingDates.length > 0) {
+      throw new ConflictException('One or more dates already exist');
+    }
+
+    // 2. Insert new dates
+    const result = await this.prisma.datePresence.createMany({
+      data: parsedDates.map((date) => ({ date })),
+    });
+
+    return result;
+  }
+  async createPresence(createPresenceDto: CreatePresenceDto) {
+    const { etudiantId, presences } = createPresenceDto;
+
+    const presenceRecords = presences.map((presence) => {
+      return {
+        etudiantId,
+        idDP: presence.idDP,
+        etat: EtatPresence.Absent as EtatPresence,
+      };
+    });
+
+    return await this.prisma.presence.createMany({
+      data: presenceRecords,
+    });
   }
 }
