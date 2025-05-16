@@ -5,7 +5,13 @@ import {
 } from '@nestjs/common';
 
 import { PrismaService } from 'src/prisma/prisma.service';
-import { CreateTacheDto, QuestionDto, TacheNoms } from './dto';
+import {
+  CreateEtapeDto,
+  CreateRapportMemoireDto,
+  CreateTacheDto,
+  QuestionDto,
+  TacheNoms,
+} from './dto';
 import { TacheNom } from '@prisma/client';
 
 @Injectable()
@@ -252,6 +258,7 @@ export class EutdaintService {
       where: { idB: etu.idB },
       select: {
         idB: true,
+        responsabilite: true,
         idG: true,
       },
     });
@@ -262,6 +269,7 @@ export class EutdaintService {
 
     return {
       idB: binome.idB,
+      responsabilite: binome.responsabilite,
       idG: binome.idG,
     };
   }
@@ -385,5 +393,116 @@ export class EutdaintService {
     );
 
     return notesWithEtapeNames;
+  }
+  async createRapportEtape(createEtapeDto: CreateEtapeDto) {
+    const { idB, idEtape, description, titre, rapportUrl } = createEtapeDto;
+
+    const binomes = await this.prisma.binome.findUnique({
+      where: { idB },
+    });
+
+    if (!binomes) {
+      throw new ForbiddenException('Cannot find binôme');
+    }
+
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        const rapport = await tx.rapport.create({
+          data: {
+            titre,
+            idB,
+          },
+        });
+
+        await tx.versionRapport.create({
+          data: {
+            description,
+            lien: rapportUrl,
+            idR: rapport.idR,
+          },
+        });
+
+        await tx.rapportEtape.create({
+          data: {
+            idR: rapport.idR,
+          },
+        });
+
+        const etapeExist = await tx.etape.findUnique({
+          where: {
+            idEtape,
+          },
+        });
+
+        if (!etapeExist) {
+          throw new NotFoundException('Etape not found');
+        }
+
+        await tx.etape.update({
+          where: {
+            idEtape: etapeExist.idEtape,
+          },
+          data: {
+            idR: rapport.idR,
+          },
+        });
+
+        return {
+          type: 'success',
+        };
+      });
+
+      return result;
+    } catch (error) {
+      console.error(error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new ForbiddenException('Transaction failed: ' + errorMessage);
+    }
+  }
+  async createRapportMemoier(createTacheDto: CreateRapportMemoireDto) {
+    const { idB, description, titre, rapportUrl } = createTacheDto;
+
+    const binomes = await this.prisma.binome.findUnique({
+      where: { idB },
+    });
+
+    if (!binomes) {
+      throw new ForbiddenException('Cannot find binôme');
+    }
+
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        const rapport = await tx.rapport.create({
+          data: {
+            titre,
+            idB,
+          },
+        });
+
+        await tx.versionRapport.create({
+          data: {
+            description,
+            lien: rapportUrl,
+            idR: rapport.idR,
+          },
+        });
+
+        await tx.rapportFinal.create({
+          data: {
+            idR: rapport.idR,
+          },
+        });
+
+        return { type: 'succes', rapport };
+      });
+
+      return result;
+    } catch (error) {
+      console.error(error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new ForbiddenException('Transaction failed: ' + errorMessage);
+    }
   }
 }

@@ -35,3 +35,36 @@ export class CreateTacheDto {
   @IsNotEmpty()
   rapportUrl: string;
 }
+export class CreateEtapeDto {
+  @IsInt()
+  idB: number;
+
+  @IsInt()
+  idEtape: number;
+
+  @IsNotEmpty()
+  @IsNotEmpty()
+  titre: string;
+
+  @IsString()
+  @IsNotEmpty()
+  description: string;
+
+  @IsNotEmpty()
+  rapportUrl: string;
+}
+export class CreateRapportMemoireDto {
+  @IsInt()
+  idB: number;
+
+  @IsNotEmpty()
+  @IsNotEmpty()
+  titre: string;
+
+  @IsString()
+  @IsNotEmpty()
+  description: string;
+
+  @IsNotEmpty()
+  rapportUrl: string;
+}
