@@ -338,8 +338,8 @@ model Participation {
 model FeedBack {
   idF         Int     @id @default(autoincrement())
   description String
-  idB         Int
-  binome      Binome  @relation(fields: [idB], references: [idB])
-  idR         Int
-  rapport     Rapport @relation(fields: [idR], references: [idR])
+  idB         Int?
+  binome      Binome?  @relation(fields: [idB], references: [idB])
+  idR         Int?
+  rapport     Rapport? @relation(fields: [idR], references: [idR])
 }

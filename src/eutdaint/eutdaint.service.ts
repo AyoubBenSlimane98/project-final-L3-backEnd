@@ -7,12 +7,12 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   CreateEtapeDto,
+  CreateFeedbackDto,
   CreateRapportMemoireDto,
   CreateTacheDto,
   QuestionDto,
-  TacheNoms,
 } from './dto';
-import { TacheNom } from '@prisma/client';
+import { EtapeNom } from '@prisma/client';
 
 @Injectable()
 export class EutdaintService {
@@ -233,6 +233,16 @@ export class EutdaintService {
     return casList;
   }
 
+  async getEtapeOfResbonsablite(idS: number, etape: string) {
+    const etapes = await this.prisma.etape.findMany({
+      where: {
+        idS,
+        nom: etape as EtapeNom,
+      },
+    });
+    if (etape.length === 0) throw new Error('etape not valid');
+    return etapes[0].idEtape;
+  }
   async getInfoEtudiant(sub: number) {
     const userEtu = await this.prisma.utilisateur.findUnique({
       where: { idC: sub },
@@ -266,7 +276,45 @@ export class EutdaintService {
     if (!binome) {
       throw new ForbiddenException('Cannot find binome');
     }
+    const groupe = await this.prisma.groupe.findUnique({
+      where: {
+        idG: binome.idG,
+      },
+    });
+    if (!groupe) {
+      throw new ForbiddenException('Cannot find groupe');
+    }
+    let etapeNom = '';
+    switch (binome.responsabilite) {
+      case 'chapter_1':
+        etapeNom = 'Analyse';
+        break;
 
+      case 'chapter_2':
+        etapeNom = 'Conception';
+        break;
+      case 'chapter_3':
+        etapeNom = 'Developpement';
+        break;
+      default:
+        break;
+    }
+    if (groupe.idS === null || groupe.idS === undefined) {
+      throw new ForbiddenException('Groupe is not linked to any subject (idS)');
+    }
+    if (
+      etapeNom === 'Analyse' ||
+      etapeNom === 'Developpement' ||
+      etapeNom === 'Conception'
+    ) {
+      const result = await this.getEtapeOfResbonsablite(groupe.idS, etapeNom);
+      return {
+        idB: binome.idB,
+        idEtape: result,
+        responsabilite: binome.responsabilite,
+        idG: binome.idG,
+      };
+    }
     return {
       idB: binome.idB,
       responsabilite: binome.responsabilite,
@@ -275,7 +323,7 @@ export class EutdaintService {
   }
 
   async createRapport(createTacheDto: CreateTacheDto) {
-    const { idB, idS, description, nom, rapportUrl, tache } = createTacheDto;
+    const { idB, description, titre, rapportUrl, tache } = createTacheDto;
 
     const binomes = await this.prisma.binome.findUnique({
       where: { idB },
@@ -285,20 +333,11 @@ export class EutdaintService {
       throw new ForbiddenException('Cannot find binôme');
     }
 
-    const tacheNomKey = Object.keys(TacheNoms).find(
-      (key) => TacheNom[key as keyof typeof TacheNom] === tache,
-    );
-    if (!tacheNomKey) {
-      throw new ForbiddenException('Invalid tâche value');
-    }
-
-    const tacheNom: TacheNom = TacheNom[tacheNomKey as keyof typeof TacheNom];
-
     try {
       const result = await this.prisma.$transaction(async (tx) => {
         const rapport = await tx.rapport.create({
           data: {
-            titre: nom,
+            titre,
             idB,
           },
         });
@@ -317,20 +356,9 @@ export class EutdaintService {
           },
         });
 
-        const etapeExist = await tx.etape.findFirst({
-          where: {
-            idS: idS,
-          },
-        });
-
-        if (!etapeExist) {
-          throw new NotFoundException('Etape not found');
-        }
-
         const tacheData = await tx.tâches.findFirst({
           where: {
-            idEtape: etapeExist.idEtape,
-            nom: tacheNom,
+            nom: String(tache),
           },
         });
 
@@ -358,6 +386,7 @@ export class EutdaintService {
       throw new ForbiddenException('Transaction failed: ' + errorMessage);
     }
   }
+
   async getNoteEtapEtudiant(idU: number) {
     const etu = await this.prisma.etudiant.findUnique({
       where: { idU },
@@ -504,5 +533,93 @@ export class EutdaintService {
         error instanceof Error ? error.message : 'Unknown error';
       throw new ForbiddenException('Transaction failed: ' + errorMessage);
     }
+  }
+
+  async getSujectEtud(idG: number) {
+    const groupes = await this.prisma.groupe.findUnique({
+      where: {
+        idG,
+      },
+    });
+
+    if (!groupes) throw new Error('accoun groupe valid ');
+    if (groupes.idS === null || groupes.idS === undefined) {
+      throw new Error('Group is not linked to any subject (idS)');
+    }
+    return await this.getAllRapportChapiter(groupes.idS);
+  }
+  async getAllRapportChapiter(idS: number) {
+    const chapters = await this.prisma.etape.findMany({
+      where: {
+        idS,
+        idR: { not: null },
+      },
+    });
+
+    if (chapters.length === 0) {
+      throw new Error('No chapter has a report');
+    }
+
+    const results = await Promise.all(
+      chapters.map(async (item) => {
+        const raport = await this.prisma.versionRapport.findFirst({
+          where: {
+            idR: item.idR!,
+          },
+        });
+
+        return {
+          nom: item.nom,
+          lien: raport?.lien ?? null,
+        };
+      }),
+    );
+
+    return results;
+  }
+
+  async createFeedBack(dto: CreateFeedbackDto) {
+    const { responsabilite, idG, description } = dto;
+
+    const binome = await this.prisma.binome.findFirst({
+      where: {
+        idG,
+        responsabilite,
+      },
+    });
+
+    if (!binome) {
+      throw new Error(
+        'Cannot find any binome with the specified responsabilité',
+      );
+    }
+
+    await this.prisma.feedBack.create({
+      data: {
+        idB: binome.idB,
+        description,
+      },
+    });
+    return {
+      message: 'feedback created',
+    };
+  }
+
+  async allFeedBack(idB: number) {
+    return await this.prisma.feedBack.findMany({
+      where: {
+        idB,
+      },
+    });
+  }
+  async deleteFeedBack(idF: number) {
+    await this.prisma.feedBack.delete({
+      where: {
+        idF,
+      },
+    });
+    return {
+      message: 'succes ',
+    };
   }
 }

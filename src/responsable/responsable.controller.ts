@@ -66,6 +66,10 @@ export class ResponsableController {
   getAllPresencesByGroupe() {
     return this.responsableService.getAllStudent();
   }
+  @Get('switch-account')
+  async canSwitchAccount(@CompteID('sub', ParseIntPipe) sub: number) {
+    return this.responsableService.canSwitchAccount(sub);
+  }
   @Public()
   @Get('taches')
   async getAllTacheOfEtapeByBinome(
@@ -77,6 +81,13 @@ export class ResponsableController {
       idEtape,
     );
   }
+  @Get('etape')
+  async getRapportEtapeGroupe(
+    @Query('idG', ParseIntPipe) idG: number,
+    @Query('etape') etape: string,
+  ) {
+    return await this.responsableService.getRapportEtapeGroupe(idG, etape);
+  }
   @Public()
   @Get('etape/:idG')
   async getAllEtapesOfGroupe(@Param('idG', ParseIntPipe) idG: number) {
@@ -85,6 +96,12 @@ export class ResponsableController {
   @Get('binomes/:idG')
   async getAllEtudiantOfGroupe(@Param('idG', ParseIntPipe) idG: number) {
     return await this.responsableService.getAllEtudiantOfGroupe(idG);
+  }
+
+  @Get('rapport-final/:idG')
+  async getRapportFinal(@Param('idG', ParseIntPipe) idG: number) {
+    console.log('idG : ', idG);
+    return this.responsableService.getRapportFinal(idG);
   }
   @Public()
   @Get('groupe-responsable/:enseignantId')

@@ -893,4 +893,174 @@ export class ResponsableService {
       noteFinal: updatedEtudiant.noteFinal,
     };
   }
+
+  async getRapportFinal(idG: number) {
+    const groupe = await this.prisma.groupe.findUnique({ where: { idG } });
+    if (!groupe) throw new Error(`Group not found with idG: ${idG}`);
+
+    const binome = await this.prisma.binome.findFirst({
+      where: {
+        idG,
+        responsabilite: 'introduction_resume_conclustion',
+      },
+      include: {
+        etudiant: {
+          include: {
+            user: true,
+          },
+        },
+      },
+    });
+
+    if (!binome) throw new Error(`Binôme not found for groupe ${idG}`);
+
+    const rapport = await this.prisma.rapport.findFirst({
+      where: {
+        idB: binome.idB,
+        rapportFinal: { isNot: null },
+      },
+      include: {
+        rapportFinal: true,
+        versionRapport: {
+          orderBy: {
+            updatedAt: 'desc',
+          },
+          take: 1,
+        },
+      },
+    });
+
+    if (!rapport) throw new Error(`Rapport not found for binome ${binome.idB}`);
+
+    return {
+      rapportInfo: {
+        titre: rapport.titre,
+        idR: rapport.idR,
+        createdAt: rapport.createdAt,
+      },
+      latestVersion: rapport.versionRapport[0],
+      rapportFinal: rapport.rapportFinal,
+      binomeEtudiant: binome.etudiant.map((etudiant) => ({
+        nom: etudiant.user.nom,
+        prenom: etudiant.user.prenom,
+      })),
+    };
+  }
+
+  async getRapportEtapeGroupe(idG: number, etape: string) {
+    console.log({ idG, etape });
+    const groupe = await this.prisma.groupe.findUnique({ where: { idG } });
+    if (!groupe) throw new Error(`Group not found with idG: ${idG}`);
+
+    let responsabilite: 'chapter_1' | 'chapter_2' | 'chapter_3';
+    let etapeNom: EtapeNom;
+
+    switch (etape) {
+      case 'chapter_1':
+        responsabilite = 'chapter_1';
+        etapeNom = EtapeNom.Analyse;
+        break;
+      case 'chapter_2':
+        responsabilite = 'chapter_2';
+        etapeNom = EtapeNom.Conception;
+        break;
+      case 'chapter_3':
+        responsabilite = 'chapter_3';
+        etapeNom = EtapeNom.Developpement;
+        break;
+      default:
+        throw new Error(`Unsupported etape: ${etape}`);
+    }
+
+    const binome = await this.prisma.binome.findFirst({
+      where: {
+        idG,
+        responsabilite,
+      },
+      include: {
+        etudiant: {
+          include: {
+            user: true,
+          },
+        },
+      },
+    });
+
+    if (!binome) throw new Error(`Binôme not found for groupe ${idG}`);
+
+    const rapport = await this.prisma.rapport.findFirst({
+      where: {
+        idB: binome.idB,
+        rapportEtape: {
+          is: {
+            etapes: {
+              is: {
+                nom: etapeNom,
+              },
+            },
+          },
+        },
+      },
+      include: {
+        rapportEtape: {
+          include: {
+            etapes: true,
+          },
+        },
+        versionRapport: {
+          orderBy: {
+            updatedAt: 'desc',
+          },
+          take: 1,
+        },
+      },
+    });
+
+    if (!rapport)
+      throw new Error(
+        `Rapport not found for binome ${binome.idB} and etape ${etapeNom}`,
+      );
+
+    return {
+      rapportInfo: {
+        titre: rapport.titre,
+        createdAt: rapport.createdAt,
+      },
+      latestVersion: rapport.versionRapport[0],
+      rapportEtape: rapport.rapportEtape,
+      binomeEtudiant: binome.etudiant.map((etudiant) => ({
+        nom: etudiant.user.nom,
+        prenom: etudiant.user.prenom,
+      })),
+    };
+  }
+  async canSwitchAccount(sub: number) {
+    const existentCompte = await this.prisma.compte.findUnique({
+      where: { idC: sub },
+      include: {
+        user: {
+          include: {
+            enseignant: {
+              include: {
+                principal: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!existentCompte) {
+      throw new ForbiddenException('Email or Password is not correct');
+    }
+    const utilisateur = existentCompte.user;
+    if (!utilisateur?.enseignant?.principal) {
+      return {
+        access: false,
+      };
+    }
+    return {
+      access: true,
+    };
+  }
 }

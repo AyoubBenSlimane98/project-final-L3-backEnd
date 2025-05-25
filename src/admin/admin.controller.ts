@@ -21,7 +21,7 @@ import { CompteID, Public } from 'src/authentication/common/decorators';
 @Controller('admin')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
-
+  @Public()
   @Post('sign-up')
   async createAccount(@Body() adminSignupDto: AdminSignupDto) {
     return await this.adminService.createAccount(adminSignupDto);
@@ -46,7 +46,7 @@ export class AdminController {
   async getAllAnnounces(@CompteID('sub', ParseIntPipe) sub: number) {
     return await this.adminService.getAllAnnounces(sub);
   }
-  @Public()
+
   @Post()
   async createPresence(@Body() createPresenceDto: CreatePresenceDto) {
     return await this.adminService.createPresence(createPresenceDto);

@@ -59,6 +59,7 @@ export class AuthenticationService {
           nom,
           prenom,
           sexe,
+          image: 'uploads/1748017329549-user.jpg',
           bio: defaultBio,
           dateNaissance,
           idC: newCompte.idC,
@@ -96,7 +97,7 @@ export class AuthenticationService {
           token: tokens,
         };
       }
-      if (role === 'Both') {
+      if (role === 'Principale / Responsable') {
         await tx.enseignantPrincipal.create({
           data: {
             idU: newEnseignant.idU,

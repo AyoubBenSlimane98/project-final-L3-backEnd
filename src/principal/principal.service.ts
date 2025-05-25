@@ -13,7 +13,7 @@ import {
 } from './dto';
 import { EncryptionService } from 'src/encryption/encryption.service';
 import { TokenService } from 'src/token/token.service';
-import { AuthSigninDto } from 'src/authentication/dto';
+
 import { generateOTP } from 'src/util';
 
 @Injectable()
@@ -199,6 +199,7 @@ export class PrincipalService {
           data: {
             nom: user.Etudaint1.nom,
             prenom: user.Etudaint1.prenom,
+            image: 'uploads/1748017329549-user.jpg',
             dateNaissance: user.Etudaint1.dateNaissance,
             sexe: user.Etudaint1.sexe,
             bio: defaultBio1,
@@ -229,6 +230,7 @@ export class PrincipalService {
             data: {
               nom: user.Etudaint2.nom,
               prenom: user.Etudaint2.prenom,
+              image: 'uploads/1748017329549-user.jpg',
               dateNaissance: user.Etudaint2.dateNaissance,
               sexe: user.Etudaint2.sexe,
               bio: defaultBio2,
@@ -335,9 +337,8 @@ export class PrincipalService {
     };
   }
 
-  async switchAccount(authSigninDto: AuthSigninDto) {
-    const { email, password } = authSigninDto;
-
+  async switchAccount(body: { email: string; role: string }) {
+    const { email, role } = body;
     const existentCompte = await this.prisma.compte.findUnique({
       where: { email },
       include: {
@@ -354,15 +355,6 @@ export class PrincipalService {
     });
 
     if (!existentCompte) {
-      throw new ForbiddenException('Email or Password is not correct');
-    }
-
-    const isPasswordCorrect = await this.encryptionService.comparePasswords(
-      password,
-      existentCompte.password,
-    );
-
-    if (!isPasswordCorrect) {
       throw new ForbiddenException('Email or Password is not correct');
     }
 
@@ -399,7 +391,7 @@ export class PrincipalService {
     return {
       message: 'Login successful',
       token: tokens,
-      role: 'enseignant_responsable',
+      role,
     };
   }
 

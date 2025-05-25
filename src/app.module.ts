@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { PrismaModule } from './prisma/prisma.module';
 import { EmailModule } from './email/email.module';
 import { CodeOtpModule } from './code-otp/code-otp.module';
@@ -10,6 +10,7 @@ import { ResponsableModule } from './responsable/responsable.module';
 import { EncryptionModule } from './encryption/encryption.module';
 import { TokenModule } from './token/token.module';
 import { EutdaintModule } from './eutdaint/eutdaint.module';
+import { LoggerMiddleware } from './eutdaint/Middleware/logger.middleware';
 
 @Module({
   imports: [
@@ -27,4 +28,8 @@ import { EutdaintModule } from './eutdaint/eutdaint.module';
   ],
   providers: [],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(LoggerMiddleware).forRoutes('*');
+  }
+}

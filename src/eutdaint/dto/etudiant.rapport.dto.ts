@@ -1,14 +1,14 @@
-import { IsInt, IsString, IsNotEmpty } from 'class-validator';
+import { IsInt, IsString, IsNotEmpty, IsEnum } from 'class-validator';
 
 export enum TacheNoms {
-  DiagrammeCasUtilisation = 'Diagramme de cas d’utilisation',
-  DescriptionTextuelle = 'Description Textuelle',
-  DescriptionGraphique = 'Description Graphique',
-  DiagrammeClasseParticipative = 'Diagramme de classe participative',
-  IHM = 'IHM',
-  DiagrammeClasse = 'Diagramme de classe',
-  DiagrammeSequenceDetaille = 'Diagramme de séquence détaillé',
-  Developpement = 'Developpement',
+  DiagrammeCasUtilisation,
+  DescriptionTextuelle,
+  DescriptionGraphique,
+  DiagrammeClasseParticipative,
+  IHM,
+  DiagrammeClasse,
+  DiagrammeSequenceDetaille,
+  Developpement,
 }
 
 export class CreateTacheDto {
@@ -18,15 +18,11 @@ export class CreateTacheDto {
   @IsInt()
   idG: number;
 
-  @IsInt()
-  idS: number;
-
-  @IsString()
-  @IsNotEmpty()
-  tache: string;
+  @IsEnum(TacheNoms)
+  tache: TacheNoms;
 
   @IsNotEmpty()
-  nom: TacheNoms;
+  titre: string;
 
   @IsString()
   @IsNotEmpty()

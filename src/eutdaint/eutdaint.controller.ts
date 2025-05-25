@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -10,6 +11,7 @@ import { EutdaintService } from './eutdaint.service';
 import { CompteID, Public } from 'src/authentication/common/decorators';
 import {
   CreateEtapeDto,
+  CreateFeedbackDto,
   CreateRapportMemoireDto,
   CreateTacheDto,
   QuestionDto,
@@ -27,10 +29,18 @@ export class EutdaintController {
   async getNoteEtapesForEtudiant(@Param('idU', ParseIntPipe) idU: number) {
     return this.eutdaintService.getNoteEtapEtudiant(idU);
   }
+  @Get('groupe-sujet/:idG')
+  async getSujectEtud(@Param('idG', ParseIntPipe) idG: number) {
+    return this.eutdaintService.getSujectEtud(idG);
+  }
   @Public()
   @Get('binomes/:idB')
   async getBinomeData(@Param('idB', ParseIntPipe) idB: number) {
     return await this.eutdaintService.getBinomeData(idB);
+  }
+  @Get('feedbacks/:idB')
+  async allFeedBack(@Param('idB', ParseIntPipe) idB: number) {
+    return await this.eutdaintService.allFeedBack(idB);
   }
 
   @Get('cas/:idG/groupe')
@@ -60,6 +70,10 @@ export class EutdaintController {
   async getAllQuestion() {
     return await this.eutdaintService.getAllQuestion();
   }
+  @Post('feedback')
+  async createFeedBack(@Body() dto: CreateFeedbackDto) {
+    return this.eutdaintService.createFeedBack(dto);
+  }
 
   @Post('question')
   async createQuestion(@Body() questionDto: QuestionDto) {
@@ -77,5 +91,10 @@ export class EutdaintController {
   @Post('deposer-rapport')
   async createRapport(@Body() createTacheDto: CreateTacheDto) {
     return await this.eutdaintService.createRapport(createTacheDto);
+  }
+
+  @Delete(':idF')
+  async deleteFeedBack(@Param('idF', ParseIntPipe) idF: number) {
+    return await this.eutdaintService.deleteFeedBack(idF);
   }
 }
