@@ -72,9 +72,11 @@ model Compte {
   idC      Int          @id @default(autoincrement())
   email    String       @unique
   password String
+  etat     Boolean      @default(false)
   user     Utilisateur?
   codeOTP  CodeOTP?
   token    Token?
+
 }
 
 model Utilisateur {
