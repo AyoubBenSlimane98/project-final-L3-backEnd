@@ -20,7 +20,7 @@ import {
 @Controller('eutdaint')
 export class EutdaintController {
   constructor(private readonly eutdaintService: EutdaintService) {}
-
+ 
   @Get('binome')
   async getInfoEtudiant(@CompteID('sub', ParseIntPipe) sub: number) {
     return await this.eutdaintService.getInfoEtudiant(sub);
@@ -65,6 +65,10 @@ export class EutdaintController {
   async getResponsableofGroupe(@CompteID('sub', ParseIntPipe) sub: number) {
     return await this.eutdaintService.getResponsableofGroupe(sub);
   }
+  @Get('questions')
+  async allGQuestionAndReponse(@CompteID('sub', ParseIntPipe) sub: number) {
+    return await this.eutdaintService.allGQuestionAndReponse(sub);
+  }
 
   @Get('questions')
   async getAllQuestion() {
@@ -93,6 +97,10 @@ export class EutdaintController {
     return await this.eutdaintService.createRapport(createTacheDto);
   }
 
+  @Delete('question/:idQ')
+  async deleteQuestion(@Param('idQ', ParseIntPipe) idQ: number) {
+    return await this.eutdaintService.deleteQuestion(idQ);
+  }
   @Delete(':idF')
   async deleteFeedBack(@Param('idF', ParseIntPipe) idF: number) {
     return await this.eutdaintService.deleteFeedBack(idF);

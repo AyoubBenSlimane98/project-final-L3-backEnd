@@ -622,4 +622,35 @@ export class EutdaintService {
       message: 'succes ',
     };
   }
+  async allGQuestionAndReponse(sub: number) {
+    const compte = await this.prisma.compte.findUnique({
+      where: {
+        idC: sub,
+      },
+    });
+    if (!compte) throw new Error('not found any compte ');
+    const utilisateur = await this.prisma.utilisateur.findUnique({
+      where: {
+        idC: sub,
+      },
+    });
+    if (!utilisateur) throw new Error('not found any compte ');
+    return await this.prisma.question.findMany({
+      where: {
+        etudiantId: utilisateur.idU,
+        reponse: { not: null },
+      },
+    });
+  }
+  async deleteQuestion(idQ: number) {
+    console.log({ idQ });
+    await this.prisma.question.delete({
+      where: {
+        idQ,
+      },
+    });
+    return {
+      message: 'succes deleted ',
+    };
+  }
 }
